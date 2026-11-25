@@ -2940,6 +2940,35 @@ td.sticky-col {
       }));
     }
 
+    // 匯入別套系統的資料後，個案上記的負責人代號是「那套系統」的人。
+    // 那些代號不是這套系統的成員，但資料本身完全有效，不能丟、不能改
+    // ——改了就是把歷史紀錄改成錯的。所以資料留著，但要告訴使用者
+    // 「有幾個代號不屬於你現在的成員」，否則他會以為那是自己建的成員，
+    // 或以為名冊壞掉了。
+    function findUnknownOwners() {
+      const known = new Set((appData.members || []).map(member => String(member.id)));
+      const seen = new Set();
+      const collect = owner => {
+        const code = String(owner || '').trim();
+        if (!code || known.has(code)) return;
+        seen.add(code);
+      };
+      (appData.optBone || []).forEach(row => {
+        ['t1Owner', 'p1EndOwner', 't2Owner', 'washEndOwner', 't3Owner', 'p2EndOwner', 't4Owner', 'endOwner'].forEach(field => collect(row[field]));
+      });
+      (appData.music40 || []).forEach(row => {
+        ['followOwner', 'eval1Owner', 'eval2Owner', 'eval3Owner', 'endOwner'].forEach(field => collect(row[field]));
+      });
+      (appData.customStudies || []).forEach(study => {
+        collect(study.defaultOwner);
+        (study.milestones || []).forEach(item => collect(item?.owner));
+        (study.subjects || []).forEach(subject => {
+          Object.values(subject.items || {}).forEach(item => collect(item?.owner));
+        });
+      });
+      return Array.from(seen).sort();
+    }
+
     function setSyncStatus(text, state = 'local') {
       const status = document.getElementById('syncStatusText');
       const button = document.getElementById('syncNowBtn');
@@ -3127,7 +3156,7 @@ td.sticky-col {
         `OPT_Bone 個案：${data.optBone.length}；music40 個案：${data.music40.length}`,
         `自訂研究案：${custom.length}；自訂案個案：${customSubjects}；追蹤節點：${milestoneTotal}`,
         `已完成項目：約 ${doneTotal} 筆`
-      ].join('\\n');
+      ].join('\n');
     }
 
     /**
@@ -5086,12 +5115,12 @@ td.sticky-col {
             const parsed = JSON.parse(ev.target.result);
             const errors = validateImportedData(parsed);
             if (errors.length > 0) {
-              alert(`JSON 檔案格式不符，未修改目前資料：\\n\\n${errors.slice(0, 12).join('\\n')}${errors.length > 12 ? '\\n…其餘錯誤略' : ''}`);
+              alert(`JSON 檔案格式不符，未修改目前資料：\n\n${errors.slice(0, 12).join('\n')}${errors.length > 12 ? '\n…其餘錯誤略' : ''}`);
               e.target.value = '';
               return;
             }
             const summary = summarizeImportedData(parsed, file.name);
-            const shouldImport = confirm(`匯入摘要：\\n\\n${summary}\\n\\n⚠️ 確認後將覆蓋目前瀏覽器中的研究資料。\\n取消不會改變目前資料。\\n\\n確定要繼續匯入嗎？`);
+            const shouldImport = confirm(`匯入摘要：\n\n${summary}\n\n⚠️ 確認後將覆蓋目前瀏覽器中的研究資料。\n取消不會改變目前資料。\n\n確定要繼續匯入嗎？`);
             if (!shouldImport) {
               e.target.value = '';
               return;
@@ -5122,7 +5151,17 @@ td.sticky-col {
             setSyncStatus(backendEnabled() ? `已同步 rev.${remoteRevision}` : '本機模式', backendEnabled() ? 'remote' : 'local');
             renderAll();
             e.target.value = '';
-            alert(`資料匯入成功！\\n\\n${summary}\\n\\n已先建立匯入前安全快照${backendEnabled() ? `，遠端 revision=${remoteRevision}` : ''}。`);
+            // 負責人代號不屬於目前名冊時要講清楚。資料照原樣保留（那是歷史紀錄），
+            // 但要讓使用者知道「這些代號不是你的成員」，而不是自己發現名冊對不上。
+            const unknownOwners = findUnknownOwners();
+            const ownerNote = unknownOwners.length === 0 ? '' : (
+              '\n\n⚠️ 有 ' + unknownOwners.length + ' 個負責人代號不在目前的成員名冊裡：\n'
+              + unknownOwners.slice(0, 8).join('、') + (unknownOwners.length > 8 ? ' 等' : '')
+              + '\n\n這些是資料原本記的負責人（例如示範資料的 DEMO-A），資料本身沒有被改動。\n'
+              + '如果你要換成現在的成員，可以在「成員管理」新增對應代號，\n'
+              + '或直接到各研究案把負責人改成你的團隊成員。'
+            );
+            alert(`資料匯入成功！\n\n${summary}\n\n已先建立匯入前安全快照${backendEnabled() ? `，遠端 revision=${remoteRevision}` : ''}。${ownerNote}`);
           } catch (err) {
             alert('讀取 JSON 失敗，未修改目前資料：' + err.message);
             e.target.value = '';

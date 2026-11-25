@@ -45,7 +45,7 @@ const IMPORTED_DATA = {
   schemaVersion: 1,
   members: FOREIGN_MEMBERS,
   optBone: [
-    { id: 'OPT-001', name: '王小明', owner: 'PI', study: 'OPT', status: '收案中', baselineDate: '2026-09-01', fup1Done: true }
+    { id: 'OPT-001', name: '王小明', owner: 'PI', study: 'OPT', status: '收案中', baselineDate: '2026-09-01', fup1Done: true, t1Owner: 'DEMO-OWNER' }
   ],
   music40: [],
   customStudies: []
@@ -115,6 +115,30 @@ function report() {
     // 資料本身要保留（不能因為校正名冊把個案弄丟）
     check('匯入的個案還在', () =>
       (window.appData?.optBone || []).some(s => s.id === 'OPT-001'));
+
+    // 這項是「測試自己有沒有測到東西」的守門員：
+    // 如果後端模式根本沒開起來，下面的斷言會全部在測一個假的情境。
+    check('後端模式真的有開起來（否則這個測試沒在測東西）', () => backendEnabled() === true);
+    check('管理員代號讀得到', () => currentMemberCode() === 'PI');
+    // 匯入的資料裡，負責人代號是舊系統的人（DEMO-A）。
+    // 資料要原樣保留（那是歷史紀錄），但程式要認得出「這些不是成員」，
+    // 才能在使用者匯入後提醒他，而不是讓他以為名冊壞了。
+    check('認得出不屬於名冊的負責人代號', () => {
+      const unknown = findUnknownOwners();
+      return Array.isArray(unknown) && unknown.includes('DEMO-OWNER');
+    });
+    check('自己的成員代號不會被當成外來', () => !findUnknownOwners().includes('PI'));
+
+    // 匯入摘要會直接顯示在對話框裡。曾經這裡的換行寫成「兩個反斜線 + n」，
+    // 結果使用者看到的是字面上的反斜線加 n，而不是換行，整個摘要擠成一長串。
+    // 這是使用者一定會看到的畫面，所以固定驗一次。
+    check('匯入摘要用的是真正的換行，不是字面上的反斜線 n', () => {
+      const text = summarizeImportedData(IMPORTED_DATA, 'demo.json');
+      // 用字元碼判斷，避免這支測試自己的樣板字串又把它轉義掉
+      const REAL_NEWLINE = String.fromCharCode(10);
+      const LITERAL_BACKSLASH_N = String.fromCharCode(92, 110);
+      return text.includes(REAL_NEWLINE) && !text.includes(LITERAL_BACKSLASH_N);
+    });
 
     check('未捕捉到 JavaScript 錯誤', () => window.__uiErrors.length === 0);
 
