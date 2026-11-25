@@ -1,0 +1,21 @@
+{
+  "name": "lab-tracker-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "研究室多案追蹤系統（雲端範本，給任何研究室一鍵部署）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "check": "node scripts/check-project.mjs",
+    "check:wizard": "node wizard/sync-inline.mjs --check",
+    "test:unit": "node --test tests/unit.test.mjs",
+    "test:integration": "node --test tests/integration.test.mjs",
+    "test:e2e": "node tests/e2e.test.mjs",
+    "test:ui": "node tests/ui.test.mjs",
+    "test:wizard": "node tests/wizard.test.mjs",
+    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:wizard && npm run test:ui"
+  }
+}
