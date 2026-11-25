@@ -18,6 +18,37 @@
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 
+// 引導網頁（wizard）跑在別的網域上（可能是 file://，也可能是維護者的網站），
+// 它要打 /api/health 和 /api/setup-status 才能告訴助理「你的部署成功了」。
+// 沒有 CORS 標頭的話，瀏覽器會擋住回應，那兩個檢查永遠是「看不出來」，
+// 等於整個引導流程最重要的兩步失效。
+//
+// 只有這兩個端點需要跨網域，而且它們都刻意只回報「設定了沒」，
+// 不含金鑰也不含個人資料 —— 所以這裡用 '*' 是安全的。
+// 需要身分的端點（data、profiles、backups…）不加 CORS：
+// 那些用 Authorization 標頭帶 JWT，本來就不該讓任意網頁代打。
+const CORS_OPEN_PATHS = new Set(['health', 'setup-status', 'config']);
+
+function isCorsOpenPath(req) {
+  const url = String(req.url || '');
+  const match = url.match(/\/api\/([a-z0-9-]+)/i);
+  return match ? CORS_OPEN_PATHS.has(match[1].toLowerCase()) : false;
+}
+
+export function applyCors(req, res) {
+  if (!isCorsOpenPath(req)) return false;
+  res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-methods', 'GET, OPTIONS');
+  res.setHeader('access-control-allow-headers', 'accept, content-type');
+  res.setHeader('access-control-max-age', '86400');
+  // 預檢請求：回 204 就結束，不要繼續跑進 handler。
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return true;
+  }
+  return false;
+}
+
 export function sendJson(res, status, body) {
   res.status(status).setHeader('content-type', JSON_HEADERS['content-type']);
   return res.end(JSON.stringify(body));

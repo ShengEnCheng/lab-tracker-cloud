@@ -11,10 +11,12 @@
 // 為什麼需要 setupComplete：
 //   第一次打開時要直接顯示設定精靈，而不是先顯示登入畫面讓人卡住。
 
-import { sendJson, supabaseConfig } from './_supabase.js';
+import { sendJson, supabaseConfig, applyCors } from './_supabase.js';
 import { APP_VERSION, APP_DISPLAY_NAME } from '../src/lib/app-info.js';
 
 export default async function handler(req, res) {
+  // 引導網頁從別的網域打這支，需要 CORS 標頭（見 _supabase.js 的說明）。
+  if (applyCors(req, res)) return;
   if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed', allowed: ['GET'] });
 
   const config = supabaseConfig(false);

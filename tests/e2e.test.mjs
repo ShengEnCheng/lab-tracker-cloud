@@ -235,6 +235,37 @@ check('未登入讀資料被拒（401 或 403）',
 const dataWithBadToken = await getJson(server.url, '/api/data', { authorization: 'Bearer fake-token' });
 check('帶假 token 也被拒', [401, 403].includes(dataWithBadToken.status), `得到 ${dataWithBadToken.status}`);
 
+// === 階段 8：引導網頁需要的跨網域存取 ===
+//
+// 引導網頁跑在別的網域（可能是 file://，也可能是維護者的網站），
+// 它要能讀 health / setup-status / config 才知道「你的部署成功了」。
+// 這三個端點沒有 CORS 標頭的話，瀏覽器會擋住回應 ——
+// 使用者會看到「看不出來」，明明部署好了卻被告知不確定。
+console.log('\n階段 8：引導網頁的跨網域存取');
+
+const wizardOrigin = 'http://127.0.0.1:9999';
+for (const apiPath of ['/api/health', '/api/setup-status', '/api/config']) {
+  const res = await fetch(`${server.url}${apiPath}`, { headers: { origin: wizardOrigin } });
+  check(`${apiPath} 允許跨網域讀取`, res.headers.get('access-control-allow-origin') === '*',
+    res.headers.get('access-control-allow-origin') || '(沒有標頭)');
+}
+
+// 預檢請求（帶自訂標頭時瀏覽器會先送這個）
+const preflight = await fetch(`${server.url}/api/setup-status`, {
+  method: 'OPTIONS',
+  headers: { origin: wizardOrigin, 'access-control-request-method': 'GET' }
+});
+check('預檢請求回 204', preflight.status === 204, `得到 ${preflight.status}`);
+
+// 需要身分的端點不可以開放跨網域：那等於讓任何網頁代打使用者的帳號
+for (const apiPath of ['/api/data', '/api/profiles', '/api/backups']) {
+  const res = await fetch(`${server.url}${apiPath}`, {
+    headers: { origin: wizardOrigin, authorization: 'Bearer fake' }
+  });
+  check(`${apiPath} 不開放跨網域`, !res.headers.get('access-control-allow-origin'),
+    res.headers.get('access-control-allow-origin') ? '竟然開放了' : '');
+}
+
 await server.close();
 
 console.log(`\n端到端測試：${total - failed} 通過，${failed} 失敗`);

@@ -9,7 +9,7 @@
 //   這支端點不需要登入（否則就雞生蛋蛋生雞），所以只回報「有／沒有」，
 //   不回傳任何金鑰、也不回傳任何成員的個人資料。
 
-import { sendJson, describeConfig, supabaseConfig } from './_supabase.js';
+import { sendJson, describeConfig, supabaseConfig, applyCors } from './_supabase.js';
 import { APP_VERSION, APP_NAME, APP_DISPLAY_NAME } from '../src/lib/app-info.js';
 
 const TABLE_PROBES = ['lab_state', 'lab_profiles', 'lab_settings'];
@@ -68,6 +68,8 @@ async function readAdminCount(config) {
 }
 
 export default async function handler(req, res) {
+  // 引導網頁從別的網域打這支，需要 CORS 標頭（見 _supabase.js 的說明）。
+  if (applyCors(req, res)) return;
   if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed', allowed: ['GET'] });
 
   const config = describeConfig();

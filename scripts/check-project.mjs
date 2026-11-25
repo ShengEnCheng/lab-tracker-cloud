@@ -293,6 +293,39 @@ check('.gitignore 忽略 .env.local', () => {
 });
 
 // ---------------------------------------------------------------------------
+console.log('\n12. 範本 repo 的設定');
+
+// 引導網頁第 3 步會把助理導到 Vercel 的 Deploy Button，那個按鈕要有
+// 一個「真的存在而且公開」的 repo 才能用。repo 不存在時，助理會看到
+// Vercel 一句看不懂的錯誤，而且完全不知道是維護者的問題。
+//
+// 這裡不能直接連網路（檢查要能離線跑），所以只做兩件事：
+//   1. 確認 repoUrl 是個合法的 GitHub 網址
+//   2. 如果還是預設值，提醒「上線前要換成你自己的 repo 並確認它存在」
+check('wizard/config.js 的 repoUrl 格式正確', () => {
+  const text = read('wizard/config.js');
+  const match = text.match(/repoUrl:\s*'([^']+)'/);
+  if (!match) throw new Error('找不到 repoUrl');
+  const url = match[1];
+  if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(url)) {
+    throw new Error(`repoUrl 不是合法的 GitHub repo 網址：${url}`);
+  }
+  return true;
+});
+
+check('repoUrl 不是預設值（或已知它需要更換）', () => {
+  const text = read('wizard/config.js');
+  const match = text.match(/repoUrl:\s*'([^']+)'/);
+  if (!match) throw new Error('找不到 repoUrl');
+  if (/\/ShengEnCheng\//.test(match[1])) {
+    // 不是錯誤，但要讓維護者看到。上線前必須確認這個 repo 存在且公開。
+    notes.push(`repoUrl 仍是預設值（${match[1]}）—— 上線前請確認這個 repo 已建立、`
+      + '是 public，而且打開網址看得到內容，否則引導網頁的「一鍵部署」會失敗。');
+  }
+  return true;
+});
+
+// ---------------------------------------------------------------------------
 console.log('');
 if (failures.length) {
   console.error(`✘ 專案結構檢查失敗：${failures.length} 項`);

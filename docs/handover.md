@@ -263,6 +263,36 @@ export const TEMPLATE = {
 };
 ```
 
+### 引導網頁要放在哪裡
+
+三種都可以，建議第二種：
+
+| 方式 | 怎麼做 | 適合 |
+|---|---|---|
+| 直接把檔案給助理 | 傳 `wizard/index.html`（它會自己載入同資料夾的 `inline-bundle.js`，所以**兩個檔要一起給**） | 一兩個研究室 |
+| 放在範本 repo 的 Pages | 設定 GitHub Pages 指向 `wizard/` | 多個研究室、想給固定網址 |
+| 放在任何靜態網站 | 上傳 `wizard/` 兩個檔案 | 你已經有網站 |
+
+**注意**：`index.html` 用相對路徑載入 `inline-bundle.js`。只傳 HTML 過去會
+整頁不會動（因為模組載不到），所以兩個檔案必須放在同一個資料夾。
+改過 `wizard/wizard.js` 之後要跑 `node wizard/sync-inline.mjs`
+重新產生 `inline-bundle.js`，否則 `file://` 開的那份還是舊的
+（`npm run check:wizard` 會檢查這件事）。
+
+### 為什麼引導網頁需要 CORS
+
+引導網頁跑在別的網域（可能是 `file://`，也可能是 Pages），
+它要打使用者剛部署好的網站的 `/api/health` 與 `/api/setup-status`，
+才能告訴助理「你的部署成功了」。
+
+這兩個端點（加上 `/api/config`）在 `api/_supabase.js` 的 `CORS_OPEN_PATHS` 裡
+開放 `access-control-allow-origin: *`。它們刻意只回報「設定了沒」，
+不含金鑰也不含個人資料，所以開放是安全的。
+
+**需要身分的端點（`data`、`profiles`、`backups`…）不加 CORS** ——
+那些用 `Authorization` 帶 JWT，開放等於讓任何網頁代打使用者的帳號。
+`tests/e2e.test.mjs` 階段 8 會驗證這個分界。
+
 ---
 
 ## 發布新版

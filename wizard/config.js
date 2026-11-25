@@ -7,7 +7,17 @@
 // ============================================================================
 
 export const TEMPLATE = {
-  // 範本程式碼所在的公開 repo（維護者改成自己的）
+  // 範本程式碼所在的公開 repo（維護者改成自己的）。
+  //
+  // 這個 repo 必須真的存在、而且是公開的，否則第 3 步的「一鍵部署」會失敗：
+  // Vercel 去 GitHub 找不到這個 repo，助理會看到一句看不懂的錯誤。
+  //
+  // 上線前請確認：
+  //   1. 這個 repo 已經建好並 push 上去
+  //   2. 它是 public（private 的 repo 不能給別人複製）
+  //   3. 打開 https://github.com/<你的帳號>/lab-tracker-cloud 看得到內容
+  //
+  // `npm run check:wizard` 會檢查這一行有沒有被改過（還留著預設值就提醒你）。
   repoUrl: 'https://github.com/ShengEnCheng/lab-tracker-cloud',
   // Supabase 官方的 Vercel 整合 ID（公開值，不要改）
   supabaseIntegrationId: 'oac_VqOgBHqhEoFTPzGkPd7L0iH6',
