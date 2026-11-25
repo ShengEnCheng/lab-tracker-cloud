@@ -78,6 +78,8 @@ const REQUIRED_FILES = [
   'tests/session-flow.test.mjs',
   'tests/handoff-flow.test.mjs',
   'tests/roster.test.mjs',
+  'tests/export-completeness.test.mjs',
+  'tests/feature-checkup.test.mjs',
   'tests/wizard-journey.test.mjs',
   'tests/wizard.test.mjs',
   'tests/mock-supabase.mjs'
