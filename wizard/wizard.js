@@ -934,7 +934,7 @@ function main() {
   buildNavigation(elements, state);
   bindFieldInputs(elements, state);
   bindCopyButtons(elements, doc);
-  bindVerifyButtons(elements);
+  bindVerifyButtons(elements, state);
 
   renderMigrationSql(elements, doc);
   renderDeploySection(elements);
@@ -1158,8 +1158,15 @@ function mapVerificationStates(state) {
 }
 
 function updateProgress(elements, state) {
-  // 「開始之前」只是說明頁，不列入進度分母，否則進度永遠少一格。
-  const countable = STEPS.filter(step => step.id !== 'start');
+  // 「開始之前」與「完成了」都不是要做的事，只是說明頁與收尾頁，
+  // 不列入進度分母。
+  //
+  // 為什麼一定要排除「完成了」：它雖然也有「再檢查一次」按鈕，
+  // 但那不是使用者該做的任務。把它算進分母的話，使用者做完全部五件事
+  // 之後進度條只會停在 5/6，看起來像「還有一件事沒做」，
+  // 於是回頭把每一步再點一次——但其實他已經做完了。
+  const NON_TASK_STEPS = new Set(['start', 'done']);
+  const countable = STEPS.filter(step => !NON_TASK_STEPS.has(step.id));
   const total = countable.length;
   const done = countable.filter(step => {
     const verification = state.verifications[step.id];
@@ -1424,7 +1431,7 @@ function selectTextOf(button) {
 // 驗證按鈕
 // -----------------------------------------------------------------------------
 
-function bindVerifyButtons(elements) {
+function bindVerifyButtons(elements, state) {
   document.addEventListener('click', async event => {
     const button = event.target.closest('[data-verify]');
     if (!button || button.disabled) return;
@@ -1434,13 +1441,17 @@ function bindVerifyButtons(elements) {
     if (!stepId) return;
 
     // 從 DOM 即時讀取欄位，避免使用者貼上後還沒觸發 input 事件就按驗證。
-    const state = readFieldsIntoState();
+    //
+    // 注意這一份叫 fields 不叫 state：state 是整個頁面共用的那一份，
+    // 這裡若同名會把它遮蔽掉，後面的 state.verifications[stepId] 就會
+    // 寫到這個只有欄位值的暫時物件上而爆掉。
+    const fields = readFieldsIntoState();
     setBusy(button, true);
     setResultPending(elements, stepId);
 
     let outcome;
     try {
-      outcome = await runVerification(stepId, state);
+      outcome = await runVerification(stepId, fields);
     } catch (error) {
       outcome = {
         state: 'unknown',
@@ -1451,20 +1462,27 @@ function bindVerifyButtons(elements) {
     }
 
     // 記到狀態裡
-    const current = loadState();
-    current.verifications[stepId] = { state: outcome.state, message: outcome.message, at: Date.now() };
+    // 寫回「共用的那一份 state」，而不是另外載入一份新的。
+    //
+    // 為什麼這很重要：main() 裡的 state 是整個頁面共用的那一份，
+    // showStep() 換步驟時會拿它來算進度和打勾。如果這裡用 loadState()
+    // 另外開一份新物件，寫進去的驗證結果只存在於區域變數與 localStorage，
+    // 共用的 state 仍然不知道——於是使用者「切到下一步」時，
+    // updateProgress(state) 會算出 0 步，所有打勾一起消失。
+    // 實際症狀：每一步都驗證通過了，但進度條永遠停在「已完成 0 / 5 步」。
+    state.verifications[stepId] = { state: outcome.state, message: outcome.message, at: Date.now() };
     for (const field of PERSISTED_FIELDS) {
-      if (typeof state[field] === 'string') current[field] = state[field];
+      if (typeof state[field] === 'string') state[field] = state[field];
     }
-    saveState(current);
+    saveState(state);
 
     renderResult(elements, stepId, outcome.state, outcome.message);
-    updateNavChecks(elements, current);
-    updateProgress(elements, current);
+    updateNavChecks(elements, state);
+    updateProgress(elements, state);
 
     // 剛剛驗證通過的話，把面板上的「建議先完成上一步」提醒收起來
     if (outcome.state === 'pass') {
-      const activePanel = elements.panels.find(panel => panel.dataset.panel === current.currentStep);
+      const activePanel = elements.panels.find(panel => panel.dataset.panel === state.currentStep);
       if (activePanel) {
         const banner = activePanel.querySelector('[data-prerequisite]');
         if (banner) banner.hidden = true;

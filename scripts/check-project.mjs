@@ -75,6 +75,9 @@ const REQUIRED_FILES = [
   'tests/unit.test.mjs',
   'tests/integration.test.mjs',
   'tests/ui.test.mjs',
+  'tests/session-flow.test.mjs',
+  'tests/wizard-journey.test.mjs',
+  'tests/wizard.test.mjs',
   'tests/mock-supabase.mjs'
 ];
 for (const file of REQUIRED_FILES) {

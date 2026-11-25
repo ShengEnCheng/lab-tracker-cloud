@@ -94,6 +94,28 @@ export async function startMockSupabase({ tables = null } = {}) {
       return send(200, { version: 'v2.198.0', name: 'GoTrue' });
     }
 
+    // --- 登入（前端直接跟 Supabase Auth 要 JWT，不經過我們的 API）---
+    //
+    // 這是「設定完成之後，研究室成員真的能登入嗎」那條路徑的起點。
+    // 真實的 GoTrue 會驗密碼並簽發 JWT；這裡發一個可辨識的 token，
+    // 並把它登記到 authTokens，讓後面的資料請求能被接受。
+    if (path === '/auth/v1/token' && req.method === 'POST') {
+      const email = String(body?.email || '').toLowerCase();
+      const password = String(body?.password || '');
+      const user = state.authUsers.find(item => item.email === email && item.password === password);
+      if (!user) {
+        return send(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' });
+      }
+      const token = `token-${user.id}`;
+      if (!state.authTokens.includes(token)) state.authTokens.push(token);
+      return send(200, {
+        access_token: token,
+        token_type: 'bearer',
+        expires_in: 3600,
+        user: { id: user.id, email: user.email }
+      });
+    }
+
     // --- Auth admin users ---
     if (path === '/auth/v1/admin/users' && req.method === 'GET') {
       return send(200, { users: state.authUsers.map(user => ({ id: user.id, email: user.email, email_confirmed_at: user.email_confirm ? new Date().toISOString() : null })) });
@@ -166,6 +188,14 @@ export async function startMockSupabase({ tables = null } = {}) {
 
       const rows = state.tables[table];
 
+      // 帶有效使用者 token 的請求，要看得到「他自己那一列」（RLS 的效果）。
+      // api/ 用它來判斷呼叫者的角色，所以不能一律回空陣列。
+      if (req.method === 'GET' && isKnownUserToken) {
+        const matched = applyFilters(rows, query.filters);
+        const limited = query.limit ? matched.slice(0, Number(query.limit)) : matched;
+        return send(200, pick(limited, query.select));
+      }
+
       if (req.method === 'GET') {
         if (anonymous) {
           // RLS 對匿名使用者什麼都不給。表存在，所以是 200 而不是 404。
@@ -207,8 +237,30 @@ export async function startMockSupabase({ tables = null } = {}) {
       }
     }
 
-    // --- RPC（備份相關，測試流程不會用到，回一個合理結果）---
+    // --- RPC ---
     if (path.startsWith('/rest/v1/rpc/')) {
+      const fn = path.slice('/rest/v1/rpc/'.length);
+
+      // 寫入共用資料（api/data.js 的 POST）。真實的函式有樂觀鎖：
+      // 帶來的 base revision 跟資料庫的不一樣就丟 revision_conflict。
+      if (fn === 'apply_lab_state_change') {
+        const row = (state.tables.lab_state || [])[0];
+        if (!row) return send(400, { message: 'no lab_state row' });
+        const base = Number(body?.p_base_revision);
+        const current = Number(row.revision || 0);
+        if (Number.isFinite(base) && base !== current) {
+          return send(400, {
+            code: 'P0001',
+            message: `revision_conflict: 資料已被其他人更新（目前 ${current}，你的是 ${base}）`
+          });
+        }
+        row.data = body?.p_data ?? row.data;
+        row.revision = current + 1;
+        row.updated_at = new Date().toISOString();
+        return send(200, { revision: row.revision, schema_version: row.schema_version || 1 });
+      }
+
+      // 備份相關，測試流程不會用到，回一個合理結果
       return send(200, { revision: 1 });
     }
 
