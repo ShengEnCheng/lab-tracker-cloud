@@ -17,7 +17,7 @@ export const TEMPLATE = {
   //   2. 它是 public（private 的 repo 不能給別人複製）
   //   3. 打開 https://github.com/<你的帳號>/lab-tracker-cloud 看得到內容
   //
-  // `npm run check:wizard` 會檢查這一行有沒有被改過（還留著預設值就提醒你）。
+  // `npm run check` 會檢查這一行：格式不對是錯誤，還留著預設值則是提醒。
   repoUrl: 'https://github.com/ShengEnCheng/lab-tracker-cloud',
   // Supabase 官方的 Vercel 整合 ID（公開值，不要改）
   supabaseIntegrationId: 'oac_VqOgBHqhEoFTPzGkPd7L0iH6',
