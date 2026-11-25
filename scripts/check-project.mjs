@@ -79,6 +79,8 @@ const REQUIRED_FILES = [
   'tests/handoff-flow.test.mjs',
   'tests/roster.test.mjs',
   'tests/export-completeness.test.mjs',
+  'tests/user-export-import.test.mjs',
+  'tests/import-button.test.mjs',
   'tests/feature-checkup.test.mjs',
   'tests/wizard-journey.test.mjs',
   'tests/wizard.test.mjs',
