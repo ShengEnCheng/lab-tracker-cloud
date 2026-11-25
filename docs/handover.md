@@ -192,11 +192,11 @@ npm run test:integration  # 32 項：用假資料庫跑完整流程
 npm run test:e2e          # 53 項：照瀏覽器實際發的請求打一輪
 npm run test:session      # 27 項：設定完成後登入、讀寫、版本衝突
 npm run test:handoff      # 24 項：DEMO 的資料匯出後能不能匯入新系統
-npm run test:roster       # 6 項：雲端模式的成員名冊不能被外來備份蓋掉
+npm run test:roster       # 11 項：成員名冊不能被外來備份蓋掉、孤兒負責人
 npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
 npm run test:journey      # 25 項：引導網頁從第 1 步真的走到第 7 步
 npm run test:ui           # 38 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（315 項）
+npm run test:all          # 全部（320 項）
 ```
 
 ### 五支測試各負責哪一段
@@ -208,7 +208,7 @@ npm run test:all          # 全部（315 項）
 | `test:e2e` | 部署完成 → 第一次設定 → 資料真的寫進資料庫 |
 | `test:session` | **設定完成之後的日常使用**：登入、讀資料、存資料、兩人同時改 |
 | `test:handoff` | **DEMO 退役**：舊系統匯出的檔案，匯入新系統後資料一字不差 |
-| `test:roster` | **成員名冊的來源**：匯入外來備份後，名冊仍以真正的登入帳號為準 |
+| `test:roster` | **成員名冊的來源**：匯入外來備份後，名冊仍以真正的登入帳號為準；孤兒負責人認得出來 |
 | `test:journey` | 助理在引導網頁上從第 1 步按到第 7 步，每步驗證都要通過 |
 
 `test:session` 特別重要：它是唯一會驗「兩個人同時改同一份資料」的地方。
@@ -456,7 +456,7 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（315 項）
+- [ ] `npm run test:all` 全綠（320 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
 - [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那兩段
