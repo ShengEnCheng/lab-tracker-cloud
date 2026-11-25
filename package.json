@@ -16,6 +16,7 @@
     "test:e2e": "node tests/e2e.test.mjs",
     "test:ui": "node tests/ui.test.mjs",
     "test:wizard": "node tests/wizard.test.mjs",
-    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:wizard && npm run test:ui"
+    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:wizard && npm run test:ui",
+    "verify:sql": "node scripts/verify-sql.mjs"
   }
 }

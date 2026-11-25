@@ -65,6 +65,7 @@ const REQUIRED_FILES = [
   'supabase/migrations/002_lab_settings.sql',
   // 工具
   'scripts/dev-server.mjs',
+  'scripts/verify-sql.mjs',
   // 引導網頁
   'wizard/index.html',
   // 文件

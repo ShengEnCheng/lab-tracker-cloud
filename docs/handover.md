@@ -187,11 +187,33 @@ npm run dev
 
 ```bash
 npm run check             # 結構檢查（含「有沒有寫死金鑰」）
-npm run test:unit         # 45 項：驗證規則、金鑰樣式、示範資料
+npm run test:unit         # 78 項：驗證規則、金鑰樣式、引導網頁的純函式
 npm run test:integration  # 32 項：用假資料庫跑完整流程
-npm run test:ui           # 38 項：headless Chrome 實際載入頁面
-npm run test:all          # 全部
+npm run test:e2e          # 53 項：照瀏覽器實際發的請求打一輪
+npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
+npm run test:ui           # 38 項：headless Chrome 實際載入首頁
+npm run test:all          # 全部（233 項）
 ```
+
+### 建表語法要另外驗（改過 migration 之後必做）
+
+```bash
+npm install --no-save @electric-sql/pglite   # 只在驗證時裝，不進版控
+npm run verify:sql
+```
+
+它會把**引導網頁裡助理實際會貼上的那兩段 SQL** 丟進一個真的 PostgreSQL
+（PGlite，編譯成 WebAssembly，不必安裝資料庫）執行，然後確認：
+
+- 兩段語法與 `supabase/migrations/` 逐字相同（樣板字串會把 `$$` 吃成 `$`）
+- 真的跑得起來（不是「看起來有內容」而已）
+- 六張表都建立、每一張都開了 RLS
+- `lab_settings` **沒有** insert 政策（第一列只能由伺服器金鑰建立）
+- 八個函式都在，`jsonb_sha256` 算得出 sha256
+
+為什麼要單獨一支：`npm run test:all` 不能依賴額外套件（專案要維持零 npm 依賴），
+而「SQL 跑不起來」是**每一個研究室都會卡在同一步**的災難，值得多一道手動關卡。
+改過 migration，或改過 `wizard/index.html` 裡內嵌的 SQL 之後，請跑一次。
 
 ### 為什麼整合測試用假資料庫
 

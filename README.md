@@ -55,10 +55,11 @@ docs/                     安裝指南與交接文件
 ```bash
 npm run dev          # 本機啟動（http://localhost:8080）
 npm run check        # 專案結構檢查
-npm run test:unit    # 單元測試
-npm run test:integration  # 整合測試（用假資料庫，不會碰真資料）
-npm run test:ui      # UI 測試（用 headless Chrome）
-npm run test:all     # 全部
+npm run test:all     # 全部測試（233 項）
+
+# 改過 migration 或引導網頁裡的 SQL 之後，另外跑這個：
+npm install --no-save @electric-sql/pglite
+npm run verify:sql   # 把 SQL 丟進真 PostgreSQL 執行，確認建得起來
 ```
 
 本機測試要連真的資料庫時，複製 `.env.example` 為 `.env.local` 並填入 Supabase 設定。
