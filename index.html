@@ -2911,9 +2911,33 @@ td.sticky-col {
       const me = readAuthSession()?.user?.id || readAuthSession()?.user?.sub;
       currentProfile = remoteProfiles.find(profile => profile.id === me) || null;
       if (!currentProfile) throw new Error('目前帳號尚未建立研究室成員 profile，請請管理者設定。');
-      appData.members = remoteProfiles.map(profile => ({ id: profile.member_code, name: profile.display_name || profile.email, role: profile.role, userId: profile.id, email: profile.email }));
+      applyMemberRoster();
       setAuthSession(readAuthSession());
       return true;
+    }
+
+    // 成員名冊的來源，雲端模式與本機模式完全不同：
+    //
+    //   本機模式（沒有後端）→ 名冊跟著資料檔走，就是 appData.members
+    //   雲端模式           → 名冊跟著「登入帳號」走，即 lab_profiles
+    //
+    // 為什麼雲端模式一定要用 lab_profiles：能不能登入是由 Auth 帳號決定的，
+    // 資料檔裡寫的名字完全不能拿來當「誰有帳號」。若照資料檔顯示，
+    // 會出現「名冊上有這個人、但他其實沒有帳號」或反過來「管理員自己不在名冊上」。
+    //
+    // 這個函式存在的理由是「資料同步」：syncFromBackend() 會用整份資料
+    // 覆蓋 appData（包含 members），而資料檔裡的 members 是當初存檔時的樣子。
+    // 所以每次同步、每次匯入之後，都要把名冊重新校正回真正的帳號清單。
+    function applyMemberRoster() {
+      if (!backendEnabled()) return;
+      if (!Array.isArray(remoteProfiles) || remoteProfiles.length === 0) return;
+      appData.members = remoteProfiles.map(profile => ({
+        id: profile.member_code || profile.email,
+        name: profile.display_name || profile.email,
+        role: profile.role,
+        userId: profile.id,
+        email: profile.email
+      }));
     }
 
     function setSyncStatus(text, state = 'local') {
@@ -2945,6 +2969,10 @@ td.sticky-col {
         if (!payload.data || !Array.isArray(payload.data.optBone) || !Array.isArray(payload.data.music40)) throw new Error('後端資料格式不符');
         appData = payload.data;
         remoteRevision = Number(payload.revision || 0);
+        // 資料檔裡也有 members，但雲端模式的成員是「登入帳號」，
+        // 不是資料檔裡的字串。同步後一定要校正回來，否則名冊會變成
+        // 上次存檔時的樣子（甚至可能出現已離職或根本沒有帳號的人）。
+        applyMemberRoster();
         appData.refDate = getTodayISO();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedDataSnapshot()));
         setSyncStatus(`已同步 rev.${remoteRevision}`, 'remote');
@@ -5084,6 +5112,10 @@ td.sticky-col {
             appData = parsed;
             if (!Array.isArray(appData.members)) appData.members = [];
             if (!Array.isArray(appData.customStudies)) appData.customStudies = [];
+            // 匯入的檔案帶著「別套系統」的成員名冊（例如 DEMO 期間的示範成員）。
+            // 那些名字不是帳號，照著顯示會讓人以為他們能登入。
+            // 雲端模式的成員一律以這套系統真正的帳號為準。
+            applyMemberRoster();
             appData.refDate = getTodayISO();
             const persisted = persistedDataSnapshot();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));

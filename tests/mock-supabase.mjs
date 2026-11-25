@@ -241,6 +241,21 @@ export async function startMockSupabase({ tables = null } = {}) {
     if (path.startsWith('/rest/v1/rpc/')) {
       const fn = path.slice('/rest/v1/rpc/'.length);
 
+      // RPC 也要驗身分，理由和上面的 PostgREST 一樣：真實的函式是
+      // security definer，靠 auth.uid() 判斷角色。不驗的話
+      // 「未登入也能匯入」這種漏洞在測試裡抓不到。
+      const rpcApikey = String(req.headers.apikey || '');
+      const rpcAuth = String(req.headers.authorization || '');
+      const rpcBearer = rpcAuth.startsWith('Bearer ') ? rpcAuth.slice(7).trim() : '';
+      const rpcServerKey = state.secretKey || '';
+      const isServerKey = Boolean(rpcServerKey) && (rpcApikey === rpcServerKey || rpcBearer === rpcServerKey);
+      const isKnownUserToken = Boolean(rpcBearer) && state.authTokens.includes(rpcBearer);
+      if (rpcBearer && !isServerKey && !isKnownUserToken) {
+        return send(401, { message: 'Invalid JWT', code: 'PGRST301' });
+      }
+      // token 的形式是 token-<user id>，還原出呼叫者
+      const callerUserId = isKnownUserToken ? rpcBearer.replace(/^token-/, '') : null;
+
       // 寫入共用資料（api/data.js 的 POST）。真實的函式有樂觀鎖：
       // 帶來的 base revision 跟資料庫的不一樣就丟 revision_conflict。
       if (fn === 'apply_lab_state_change') {
@@ -258,6 +273,77 @@ export async function startMockSupabase({ tables = null } = {}) {
         row.revision = current + 1;
         row.updated_at = new Date().toISOString();
         return send(200, { revision: row.revision, schema_version: row.schema_version || 1 });
+      }
+
+      // 匯入整份資料（api/import.js）。照 001_lab_state.sql:225 的語意：
+      //   1. 只有 admin / backup_admin 能用（否則 not_authorized）
+      //   2. 同一個 request_id 重送時是幂等的，不會匯入兩次
+      //   3. 匯入前先存一份備份（kind='before_import'）
+      //   4. revision + 1
+      //
+      // 這裡一定要真的實作，不能回一個假的成功：匯入最怕的就是
+      // 「畫面說成功、資料其實沒進去」，那正是這個測試要抓的東西。
+      if (fn === 'import_lab_state') {
+        const requestId = String(body?.p_request_id || '');
+        const data = body?.p_data;
+        if (!requestId) return send(400, { message: 'p_request_id required' });
+        if (!data || typeof data !== 'object') return send(400, { message: 'p_data required' });
+
+        // 呼叫者身分：server 金鑰（secret）可以繞過，使用者 token 要查角色
+        if (!isServerKey) {
+          const profile = (state.tables.lab_profiles || []).find(item => item.id === callerUserId && item.active !== false);
+          const role = profile?.role;
+          if (role !== 'admin' && role !== 'backup_admin') {
+            return send(403, { message: 'not_authorized' });
+          }
+        }
+
+        // 幂等：同一個 request_id 只會生效一次
+        const existing = (state.tables.lab_audit_logs || []).find(row => row.request_id === requestId);
+        if (existing) {
+          return send(200, { revision: existing.resulting_revision, requestId, idempotent: true });
+        }
+
+        const row = (state.tables.lab_state || [])[0];
+        let nextRevision;
+        let snapshotId = null;
+        if (row) {
+          snapshotId = uuid();
+          state.tables.lab_backups = state.tables.lab_backups || [];
+          state.tables.lab_backups.push({
+            id: snapshotId,
+            source_revision: row.revision,
+            schema_version: row.schema_version || 1,
+            data: JSON.parse(JSON.stringify(row.data)),
+            kind: 'before_import',
+            created_at: new Date().toISOString()
+          });
+          nextRevision = Number(row.revision || 0) + 1;
+          row.data = data;
+          row.revision = nextRevision;
+          row.schema_version = data.schemaVersion || row.schema_version || 1;
+          row.updated_at = new Date().toISOString();
+        } else {
+          nextRevision = 1;
+          state.tables.lab_state = [{
+            id: 1,
+            data,
+            revision: nextRevision,
+            schema_version: data.schemaVersion || 1,
+            updated_at: new Date().toISOString()
+          }];
+        }
+
+        state.tables.lab_audit_logs = state.tables.lab_audit_logs || [];
+        state.tables.lab_audit_logs.push({
+          request_id: requestId,
+          action: 'import',
+          base_revision: row ? nextRevision - 1 : null,
+          resulting_revision: nextRevision,
+          created_at: new Date().toISOString()
+        });
+
+        return send(200, { revision: nextRevision, beforeSnapshotId: snapshotId, requestId });
       }
 
       // 備份相關，測試流程不會用到，回一個合理結果
