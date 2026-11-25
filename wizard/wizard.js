@@ -1179,6 +1179,13 @@ function updateProgress(elements, state) {
   if (elements.progressText) {
     elements.progressText.textContent = `已完成 ${done} / ${total} 步`;
   }
+  // 無障礙屬性也要跟著更新。HTML 裡寫死 aria-valuemax="6"，
+  // 但實際的任務數是 5 —— 讀螢幕的人會聽到「已完成 5 / 6」，
+  // 跟他看到的 5/5 不一致，會以為還有一件事沒做。
+  if (elements.progress && elements.progress.parentElement) {
+    elements.progress.parentElement.setAttribute('aria-valuemax', String(total));
+    elements.progress.parentElement.setAttribute('aria-valuenow', String(done));
+  }
 }
 
 // -----------------------------------------------------------------------------
