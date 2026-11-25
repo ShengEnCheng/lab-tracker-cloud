@@ -416,11 +416,34 @@ curl https://你的網址/api/setup-status
 
 交給下一個維護者時，確認以下項目：
 
-- [ ] 範本 repo 的 **admin 權限**已轉移（不要在個人帳號下）
-- [ ] `wizard/config.js` 裡的 `repoUrl` 指向正確的 repo
+**上線前一定要做的（沒做就不能用）**
+
+- [ ] **範本 repo 已建立並 push，而且是 public**
+      引導網頁第 3 步的「一鍵部署」會叫 Vercel 去這個 repo 複製程式碼。
+      repo 不存在或不是 public，助理按下去只會看到一句看不懂的錯誤。
+      確認方式：用「沒有登入 GitHub」的瀏覽器打開
+      `https://github.com/<你的帳號>/lab-tracker-cloud`，看得到內容才算數。
+- [ ] `wizard/config.js` 的 `repoUrl` 改成上面那個 repo
+      （`npm run check` 會提醒你：還留著預設值就代表還沒改）
+- [ ] 範本 repo 的 **admin 權限**已轉移（不要留在個人帳號下，人一離職就麻煩）
+- [ ] 引導網頁有地方可以給助理開：把 `wizard/` 整個資料夾給他們，
+      或放到任何靜態網站（`index.html` 和 `inline-bundle.js` **必須同一個資料夾**）
+
+**每次改程式碼之後**
+
+- [ ] `npm run test:all` 全綠（233 項）
+- [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
+      （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
+- [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那兩段
+      （`node wizard/sync-inline.mjs --check` 會逐字比對，也會驗證 `$$` 沒有被吃掉）
+- [ ] 改過 SQL 之後另外跑一次 `npm run verify:sql`
+      （要先用 `npm install --no-save @electric-sql/pglite`；它會把 SQL 丟進真的
+      PostgreSQL 跑一次，確認每一張研究室都會貼的那段語法沒有壞）
+
+**交接時**
+
 - [ ] 你手上沒有、也不需要任何研究室的 Supabase 金鑰
 - [ ] 這份文件與 `docs/installation.md` 都是最新的
-- [ ] `npm run test:all` 全綠
 - [ ] 知道目前有哪些研究室在用、各自的網址（做一張清單，但**不要**記他們的資料庫密碼）
 
 ---
