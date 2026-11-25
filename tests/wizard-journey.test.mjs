@@ -213,6 +213,17 @@ async function journey() {
   check('進度文字是「已完成 5 / 5 步」', () => {
     return ($('#progressText')?.textContent || '').includes('5 / 5');
   });
+
+  // 畫面上寫 5/5，讀螢幕的人也要聽到 5 —— 這兩個曾經不一致：
+  // HTML 寫死 aria-valuemax="6"，而 updateProgress 只更新視覺、沒更新 aria。
+  check('無障礙的 aria-valuemax 也是 5（不是寫死的 6）', () => {
+    const track = document.querySelector('.progress-track');
+    return track?.getAttribute('aria-valuemax') === '5';
+  });
+  check('無障礙的 aria-valuenow 是 5', () => {
+    const track = document.querySelector('.progress-track');
+    return track?.getAttribute('aria-valuenow') === '5';
+  });
   check('側邊欄五個驗證步驟都打勾', () => {
     return $$('#stepNav [data-nav-step].is-done').length === 5;
   });
