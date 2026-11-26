@@ -14,7 +14,7 @@
 **不需要寫任何程式碼。**
 
 1. 打開引導網頁（維護者會給你網址，或直接開 `wizard/index.html`）
-2. 照著畫面上的 7 個步驟做：申請 GitHub → 申請 Supabase → 建資料表 → 部署到 Vercel → 填環境變數 → 完成部署 → 建立管理員
+2. 照著畫面上的 7 個步驟做：開始之前 → 申請 GitHub → 建立資料庫（Supabase）→ 建立資料表 → 部署網站（Vercel，部署表單上直接填三個環境變數）→ 建立管理員 → 完成
 3. 每一步都有「一鍵複製」與「即時檢查」，沒過關會告訴你哪裡不對
 
 部署完成後，打開你的網址就會看到「第一次設定」畫面，填研究室名稱與管理員帳密即可開始使用。
@@ -78,6 +78,7 @@ Supabase 正在汰換舊金鑰，兩種都要支援：
 
 - 前端：`SUPABASE_PUBLISHABLE_KEY` 或 `SUPABASE_ANON_KEY`
 - 伺服器：`SUPABASE_SECRET_KEY` 或 `SUPABASE_SERVICE_ROLE_KEY`
+- 備份排程：`CRON_SECRET`（部署時由引導網頁產生；見下方「安全設計」）
 
 **有一個實測踩到的坑**：舊制金鑰必須同時放進 `apikey` 與 `Authorization: Bearer` 兩個標頭，
 否則 PostgREST 會把它當匿名請求，RLS 全部擋掉 —— 回應是 HTTP 200 但內容是 `[]`，
@@ -96,7 +97,8 @@ Supabase 正在汰換舊金鑰，兩種都要支援：
 1. 調整 `package.json` 與 `src/lib/app-info.js` 的版號（`npm run check` 會驗證兩者一致）
 2. `npm run test:all` 全部通過
 3. push 到範本 repo
-4. 通知各研究室在自己的 GitHub repo 按 **Sync fork**（或 pull），Vercel 會自動重新部署
+4. 程式碼更新不用另外通知：各研究室的 repo 每天會由 `.github/workflows/template-sync.yml` 自動拉新版（研究室可在「系統設定」關掉），
+   推上去後 Vercel 會自動重新部署。一鍵部署做出來的 repo **不是 fork**，所以沒有 Sync fork 按鈕。
 
 **資料不會受影響**，因為資料在 Supabase，不在程式碼裡。研究室更新的是程式碼，
 他們的資料庫完全沒被碰到。
@@ -116,6 +118,7 @@ Supabase 正在汰換舊金鑰，兩種都要支援：
 | 建立成員時沒帶密碼就隨機產生 | 固定預設密碼等於每個部署都有同一組公開的萬用密碼 |
 | `/api/config` 只回前端金鑰 | 它會送到瀏覽器，secret 金鑰絕不能出現在裡面 |
 | 寫入使用樂觀鎖 | 兩人同時編輯時，後者會被擋下並提示重新載入，不會靜默覆蓋 |
+| 每日備份只認 `CRON_SECRET` | `x-vercel-cron` 標頭誰都能偽造；備份只留最近 30 份，被人連敲會把舊的好備份擠掉。沒設定 `CRON_SECRET` 的舊部署會退回舊判斷（備份不中斷），`/api/setup-status` 會回 `cronSecretConfigured: false` 提醒補上 |
 
 `npm run check` 會自動檢查「有沒有寫死別人的 Supabase 網址或金鑰」「有沒有寫死的預設密碼」
 「secret 金鑰有沒有外洩」，這幾項一旦漏掉，複製出去的研究室會連到別人的資料庫。

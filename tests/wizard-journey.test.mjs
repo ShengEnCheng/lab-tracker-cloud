@@ -154,6 +154,20 @@ async function journey() {
   await sleep(250);
   check('按下一步會到第 2 步', () => $('.panel:not([hidden])')?.dataset.panel === 'github');
 
+  check('步驟順序是：資料庫 → 資料表 → 部署（資料表在 Supabase 裡順手做完）', () => {
+    const ids = $$('#stepNav [data-nav-step]').map(b => b.dataset.navStep);
+    return ids.join(',') === 'start,github,database,schema,deploy,admin,done';
+  });
+  check('每個「下一步」按鈕寫的都是真正的下一步', () => {
+    const labels = $$('#stepNav [data-nav-step]').map(b => b.querySelector('.step-label')?.textContent.trim());
+    const panels = $$('[data-panel]');
+    return panels.every((panel, i) => {
+      const next = panel.querySelector('[data-nav-next]');
+      if (!next) return true;
+      return next.textContent.includes(labels[i + 1]);
+    });
+  });
+
   // ============ 第 2 步：GitHub 帳號 ============
   check('沒填帳號就按驗證會說「請先填」', async () => true); // 下面真的做
   await clickVerifyExpectFail('github');
@@ -215,10 +229,51 @@ async function journey() {
     return $('[data-result="database"]')?.dataset.state === 'pass';
   });
 
+  await goToStep('schema');
+
+  // ============ 第 4 步：建資料表 ============
+  // 段數從 migration 檔算（由 Node 端注入 __expectedSegments），不寫死。
+  // 寫死的話，加新的一段時會紅一個看起來像「壞了」的燈，但其實是測試過期。
+  // 第 4 步唯一該做的事是「複製整份、貼一次、按一次 RUN」。
+  // 以前把「複製全部」標成「一段一段貼時不要用這個」，等於叫人不要用最省事的路。
+  check('第 4 步有一個「複製整份語法」的主要按鈕', () => {
+    const btn = document.getElementById('copyAllSql');
+    return Boolean(btn) && !btn.hidden;
+  });
+  check('「複製整份」按鈕複製的是全部段落串起來的內容', () => {
+    const btn = document.getElementById('copyAllSql');
+    if (!btn) return false;
+    const value = btn.dataset.copyValue || '';
+    // 三段都要在裡面：開頭、設定表、自動更新欄位
+    return value.includes('lab_profiles') && value.includes('lab_settings') && value.includes('auto_update_enabled');
+  });
+  check('第 4 步有告訴使用者「貼兩次也不會壞」', () => {
+    const text = document.getElementById('panel-schema').textContent;
+    return /貼兩次也不會壞|貼兩次[^。]{0,6}(安全|不會)/.test(text);
+  });
+  check('第 4 步說明「漏掉最後一段不會有錯誤訊息」', () => {
+    const text = document.getElementById('panel-schema').textContent;
+    return /不會有任何錯誤訊息|沒有任何錯誤訊息/.test(text);
+  });
+  // 自動偵測還在，但換了位置與定位：新流程走到第 3 步時還沒有網站，
+  // 所以它是給「回來重跑引導」的人用的次要路徑，不是主要路徑。
+  check('第 3 步還留著「從我的網站讀取」給回來重跑的人', () => {
+    return Boolean(document.getElementById('dbAutoDetectBtn'));
+  });
+  check('第 4 步有 ' + window.__expectedSegments + ' 段建表語法可複製（與 migration 檔數一致）',
+    () => $$('#sqlSegments details').length === window.__expectedSegments);
+  check('建表語法裡有 do $$ 區塊（沒有被吃掉）',
+    () => $$('#sqlSegments pre').some(pre => pre.textContent.includes('do $$')));
+
+  await clickVerify('schema');
+  check('建表語法跑過之後，第 4 步驗證通過', () => {
+    return $('[data-result="schema"]')?.dataset.state === 'pass';
+  });
+
   await goToStep('deploy');
 
-  // ============ 第 4 步：部署 ============
-  check('第 4 步有「一鍵部署」按鈕', () => Boolean($('#deployLink')));
+  // ============ 第 5 步：部署 ============
+  check('第 5 步有「一鍵部署」按鈕', () => Boolean($('#deployLink')));
   check('一鍵部署的網址指向 Vercel', () => String($('#deployLink')?.href || '').includes('vercel.com/new'));
   check('一鍵部署網址帶了 repository-url', () => String($('#deployLink')?.href || '').includes('repository-url='));
 
@@ -238,19 +293,32 @@ async function journey() {
     const href = String($('#deployLink')?.href || '');
     return !href.includes('integration-ids=');
   });
-  check('第 4 步有寫「No Supabase organizations found」不會出現', () => {
+  check('第 5 步有寫「No Supabase organizations found」不會出現', () => {
     const text = $('#panel-deploy')?.textContent || '';
     return /正常情況下不該出現/.test(text);
   });
 
-  check('第 4 步有列出要填的三個環境變數', () => {
-    const text = document.getElementById('deployCheckPanel')?.parentElement?.textContent || '';
-    return text.includes('SUPABASE_URL') && text.includes('SUPABASE_SECRET_KEY');
+  check('第 5 步有列出要填的四個環境變數', () => {
+    const text = document.getElementById('panel-deploy')?.textContent || '';
+    return text.includes('SUPABASE_URL') && text.includes('SUPABASE_SECRET_KEY') && text.includes('CRON_SECRET');
   });
-  check('第 4 步有「檢查網站連上了沒」按鈕', () => {
+  check('一鍵部署網址也請使用者填 CRON_SECRET', () => {
+    return String($('#deployLink')?.href || '').includes('CRON_SECRET');
+  });
+  // CRON_SECRET 是引導網頁自己產生的：表格裡要真的有一組可以複製的亂數，
+  // 而且它不能被存進 localStorage（那是密碼）。
+  check('CRON_SECRET 那一列已經產生好一組 64 字元的亂數可以複製', () => {
+    return /^[0-9a-f]{64}$/.test(document.getElementById('deployEnvCron')?.dataset.raw || '');
+  });
+  check('CRON_SECRET 沒有被存進 localStorage', () => {
+    const raw = document.getElementById('deployEnvCron')?.dataset.raw || 'x';
+    const stored = Object.keys(localStorage).map(key => localStorage.getItem(key)).join('');
+    return !stored.includes(raw);
+  });
+  check('第 5 步有「檢查網站連上了沒」按鈕', () => {
     return Boolean(document.getElementById('dbVerifySiteBtn'));
   });
-  check('第 4 步有準備「環境變數沒填」的補救說明', () => {
+  check('第 5 步有準備「環境變數沒填」的補救說明', () => {
     return Boolean(document.getElementById('deployEnvFix'));
   });
   check('補救說明有強調「一定要重新部署」', () => {
@@ -260,49 +328,8 @@ async function journey() {
 
   await fillField('siteUrl', SITE);
   await clickVerify('deploy');
-  check('填了網站網址後，第 4 步驗證通過（部署成功）', () => {
+  check('填了網站網址後，第 5 步驗證通過（部署成功）', () => {
     return $('[data-result="deploy"]')?.dataset.state === 'pass';
-  });
-
-  await goToStep('schema');
-
-  // ============ 第 5 步：建資料表 ============
-  // 段數從 migration 檔算（由 Node 端注入 __expectedSegments），不寫死。
-  // 寫死的話，加新的一段時會紅一個看起來像「壞了」的燈，但其實是測試過期。
-  // 第 5 步唯一該做的事是「複製整份、貼一次、按一次 RUN」。
-  // 以前把「複製全部」標成「一段一段貼時不要用這個」，等於叫人不要用最省事的路。
-  check('第 5 步有一個「複製整份語法」的主要按鈕', () => {
-    const btn = document.getElementById('copyAllSql');
-    return Boolean(btn) && !btn.hidden;
-  });
-  check('「複製整份」按鈕複製的是全部段落串起來的內容', () => {
-    const btn = document.getElementById('copyAllSql');
-    if (!btn) return false;
-    const value = btn.dataset.copyValue || '';
-    // 三段都要在裡面：開頭、設定表、自動更新欄位
-    return value.includes('lab_profiles') && value.includes('lab_settings') && value.includes('auto_update_enabled');
-  });
-  check('第 5 步有告訴使用者「貼兩次也不會壞」', () => {
-    const text = document.getElementById('panel-schema').textContent;
-    return /貼兩次也不會壞|貼兩次[^。]{0,6}(安全|不會)/.test(text);
-  });
-  check('第 5 步說明「漏掉最後一段不會有錯誤訊息」', () => {
-    const text = document.getElementById('panel-schema').textContent;
-    return /不會有任何錯誤訊息|沒有任何錯誤訊息/.test(text);
-  });
-  // 自動偵測還在，但換了位置與定位：新流程走到第 3 步時還沒有網站，
-  // 所以它是給「回來重跑引導」的人用的次要路徑，不是主要路徑。
-  check('第 3 步還留著「從我的網站讀取」給回來重跑的人', () => {
-    return Boolean(document.getElementById('dbAutoDetectBtn'));
-  });
-  check('第 5 步有 ' + window.__expectedSegments + ' 段建表語法可複製（與 migration 檔數一致）',
-    () => $$('#sqlSegments details').length === window.__expectedSegments);
-  check('建表語法裡有 do $$ 區塊（沒有被吃掉）',
-    () => $$('#sqlSegments pre').some(pre => pre.textContent.includes('do $$')));
-
-  await clickVerify('schema');
-  check('建表語法跑過之後，第 5 步驗證通過', () => {
-    return $('[data-result="schema"]')?.dataset.state === 'pass';
   });
 
   await goToStep('admin');
@@ -367,7 +394,7 @@ async function journey() {
   });
   // 回到中間某一步再前進，確認打勾不會消失（這是原本的 bug）
   await goToStep('database');
-  check('切回第 4 步時，其他步驟的打勾還在', () => {
+  check('切回第 3 步時，其他步驟的打勾還在', () => {
     return $$('#stepNav [data-nav-step].is-done').length === 5;
   });
   await goToStep('done');
@@ -382,7 +409,7 @@ async function journey() {
 // 為什麼要演這一齣：漏跑的人在畫面上完全看不出來 —— 系統能登入、
 // 能記錄、能匯出，一切正常。只有當他想去「系統設定」把自動更新關掉時，
 // 開關才會按不動，而且那時他已經在用了，不會知道是少跑一段 SQL。
-// 所以第 5 步的驗證必須在當下就講清楚還缺什麼。
+// 所以第 4 步的驗證必須在當下就講清楚還缺什麼。
 async function journeyMissingColumn() {
   await goToStep('schema');
   await fillField('supabaseUrl', SUPABASE);
@@ -390,7 +417,7 @@ async function journeyMissingColumn() {
 
   await clickVerifyExpectFail('schema');
 
-  check('漏跑第 3 段時，第 5 步驗證會失敗（不能一路綠燈）', () => {
+  check('漏跑第 3 段時，第 4 步驗證會失敗（不能一路綠燈）', () => {
     return $('[data-result="schema"]')?.dataset.state === 'fail';
   });
   check('失敗訊息說得出少了哪個欄位（使用者才知道要重跑哪一段）', () => {
@@ -523,7 +550,7 @@ try {
 
 report('引導網頁：從第 1 步走到第 7 步', runPage({ missingColumn: false }));
 // 情境 B 只有在瀏覽器真的跑起來時才有意義（沒有 Chrome 就只跑情境 A）。
-report('引導網頁：漏跑第 3 段時，第 5 步要講清楚', runPage({ missingColumn: true }));
+report('引導網頁：漏跑第 3 段時，第 4 步要講清楚', runPage({ missingColumn: true }));
 
 console.log(`\n完整流程測試：${total - failed} 通過，${failed} 失敗`);
 process.exit(failed ? 1 : 0);

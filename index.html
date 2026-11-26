@@ -4579,7 +4579,7 @@ td.sticky-col {
         if (payload.schemaReady === false) {
           setAutoUpdateDisabled(true, '資料庫還缺欄位');
           setAutoUpdateNotice(
-            '資料庫還缺「自動更新開關」這個欄位，所以現在無法改變設定。請回到引導網頁第 5 步，把第 3 段語法貼進 Supabase 的 SQL Editor 執行一次。',
+            '資料庫還缺「自動更新開關」這個欄位，所以現在無法改變設定。請回到引導網頁第 4 步「建立資料表」，把第 3 段語法貼進 Supabase 的 SQL Editor 執行一次。',
             'warn'
           );
         } else {
@@ -4945,22 +4945,22 @@ td.sticky-col {
         environment: {
           text: '網站執行起來了，但還沒連到資料庫。這代表「網站 → 資料庫」這一段還沒接上。',
           steps: [
-            '回引導網頁第 4 步（複製程式碼並部署），那裡有一張表列出要填的三個環境變數，'
+            '回引導網頁第 5 步（部署網站），那裡有一張表列出要填的三個環境變數，'
               + '前兩個有現成的複製按鈕，不用自己打字。',
             '到 Vercel 專案 → Settings → Environment Variables，確認這三個都有值：'
               + '<code>SUPABASE_URL</code>、<code>SUPABASE_PUBLISHABLE_KEY</code>、'
               + '<code>SUPABASE_SECRET_KEY</code>。',
             '<strong>填好之後一定要 Redeploy。</strong>環境變數是「部署時」才讀進去的，'
               + '只加變數不會讓已經在跑的網站知道 —— 這是這個畫面最常見的原因。',
-            '重新部署完，回引導網頁第 4 步按「檢查網站連上了沒」確認。',
+            '重新部署完，回引導網頁第 5 步按「檢查網站連上了沒」確認。',
             '還是不行，把這個網址給維護者，附上你看到的畫面。'
           ]
         },
         schema: {
           text: '資料庫連上了，但資料表還沒建立。',
           steps: [
-            '打開 Supabase 後台，左邊選單最下面點 <code>SQL Editor</code>。',
-            '回到引導網頁第 5 步，按「複製整份語法」，貼上，按一次 RUN。',
+            '打開 Supabase 後台，左邊那排圖示的第 3 個（像 <code>&gt;_</code>）就是 <code>SQL Editor</code>。',
+            '回到引導網頁第 4 步（建立資料表），按「複製整份語法」，貼上，按一次 RUN。',
             '<strong>整份貼一次就好。</strong>語法內部分成三段而且有順序，'
               + '整份貼讓資料庫自己照順序跑完，比一段一段貼更不容易漏。',
             '執行完回到這個網頁重新整理即可。'
