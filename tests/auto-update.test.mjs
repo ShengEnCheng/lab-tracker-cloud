@@ -332,6 +332,38 @@ try {
     assert(!/bot|noreply/i.test(email), `作者不應該是 bot 信箱（會讓 Vercel 拒絕部署），實際：${email}`);
   });
 
+  check('找不到人類作者時寧可失敗，也不要默默用 bot 身分推上去', () => {
+    // 這是「看不見的失敗」與「看得見的失敗」之間的選擇。
+    // 用 bot 身分推上去 → Vercel 默默擋掉部署，網站停在舊版，沒人知道。
+    // 停在這裡 → Actions 顯示紅燈，至少有人會去看。
+    const botOnlyRepo = join(workRoot, 'bot-only');
+    copyProjectFiles(botOnlyRepo);
+    setVersion(botOnlyRepo, '1.0.0');
+    git(botOnlyRepo, ['init', '-q', '-b', 'main']);
+    git(botOnlyRepo, ['add', '-A']);
+    execFileSync('git', ['commit', '-q', '-m', 'Initial commit from Vercel template'], {
+      cwd: botOnlyRepo,
+      stdio: 'pipe',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'lab-tracker-bot',
+        GIT_AUTHOR_EMAIL: 'lab-tracker-bot@users.noreply.github.com',
+        GIT_COMMITTER_NAME: 'lab-tracker-bot',
+        GIT_COMMITTER_EMAIL: 'lab-tracker-bot@users.noreply.github.com',
+        GIT_TERMINAL_PROMPT: '0'
+      }
+    });
+
+    const botResult = runUpdate(botOnlyRepo, ['--upstream', template, '--dry-run'], {
+      GIT_AUTHOR_NAME: '',
+      GIT_AUTHOR_EMAIL: ''
+    });
+    assert(botResult.code !== 0, '應該失敗，而不是用 bot 身分繼續');
+    assert(/找不到可以當 commit 作者的人/.test(botResult.stderr),
+      `應該說明找不到人類作者，實際：${botResult.stderr}`);
+    assertEqual(readVersion(botOnlyRepo), '1.0.0', '失敗時不應該動到任何檔案');
+  });
+
   check('推送的差異裡沒有 .github/workflows/ 的變動（GITHUB_TOKEN 的限制）', () => {
     // GitHub 的 GITHUB_TOKEN 不能修改 .github/workflows/ 底下的檔案。
     // 腳本把 .github/ 原樣保留，所以推送時那些檔案完全不在差異裡。

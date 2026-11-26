@@ -129,15 +129,42 @@ normalize_url() {
 # 出現任何錯誤（只會「什麼都沒發生」）。bot 信箱永遠不會是成員，所以改成沿用
 # 這個 repo 最早那個 commit 的作者 —— 也就是當初按一鍵部署的人，他一定是有
 # 權限的成員。
-root_commit="$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
+# 先找第一個 commit 的作者。找不到（例如 repo 是淺層複製）就退而求其次，
+# 在歷史裡找第一個「看起來是人」的作者。
 author_name=""
 author_email=""
+root_commit="$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
 if [ -n "$root_commit" ]; then
   author_name="$(git show -s --format='%an' "$root_commit" 2>/dev/null || true)"
   author_email="$(git show -s --format='%ae' "$root_commit" 2>/dev/null || true)"
 fi
-author_name="${GIT_AUTHOR_NAME:-${author_name:-lab-tracker-bot}}"
-author_email="${GIT_AUTHOR_EMAIL:-${author_email:-lab-tracker-bot@users.noreply.github.com}}"
+
+if [ -z "$author_email" ] || printf '%s' "$author_email" | grep -qiE 'bot|noreply'; then
+  # git log 由新到舊；找出第一個不是 bot 的作者。
+  while IFS='|' read -r name email; do
+    [ -z "$email" ] && continue
+    printf '%s' "$email" | grep -qiE 'bot|noreply' && continue
+    author_name="$name"
+    author_email="$email"
+    break
+  done <<EOF
+$(git log --format='%an|%ae' 2>/dev/null | head -50)
+EOF
+fi
+
+author_name="${GIT_AUTHOR_NAME:-$author_name}"
+author_email="${GIT_AUTHOR_EMAIL:-$author_email}"
+
+# 真的找不到人，就不要用 bot 身分硬推。
+#
+# 為什麼要停在這裡：用 bot 信箱推上去，Vercel 會默默擋掉部署 —— 網站停在舊版，
+# 沒有錯誤訊息、沒有通知，要等到有人發現功能不對才會知道。相反地，這裡失敗會
+# 讓 Actions 顯示紅燈，至少看得到。寧可看得到的失敗，也不要看不到的失敗。
+if [ -z "$author_email" ] || printf '%s' "$author_email" | grep -qiE 'bot|noreply'; then
+  fail "找不到可以當 commit 作者的人。Vercel 不接受 bot 身分的 commit（會默默不部署）。
+請設定 GIT_AUTHOR_NAME 與 GIT_AUTHOR_EMAIL 環境變數，指向一個有這個 Vercel
+專案權限的帳號，再重跑。" 4
+fi
 
 commit_as_author() { # $1 = 訊息；其餘參數交給 git commit
   local message="$1"
