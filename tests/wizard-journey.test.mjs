@@ -165,52 +165,103 @@ async function journey() {
     return box?.dataset.state === 'pass';
   });
 
+  await goToStep('database');
+
+  // ============ 第 3 步：建立資料庫 ============
+  check('第 3 步是「建立資料庫」（不是部署）', () => {
+    return Boolean($('#panel-database')) && document.getElementById('panel-database')?.classList.contains('is-active');
+  });
+
+  // 順序改成「先建資料庫」的理由要寫在畫面上，不然使用者會以為排錯了。
+  // 尤其是他可能看過別的教學是「部署時順便建」。
+  check('第 3 步有解釋「為什麼不是部署時順便建」', () => {
+    const text = $('#panel-database')?.textContent || '';
+    return /為什麼不是[^。]{0,20}順便建|全新的? Supabase 帳號會卡/.test(text);
+  });
+  check('第 3 步有說「先建好、再去部署」的理由（多花兩分鐘但不會卡住）', () => {
+    const text = $('#panel-database')?.textContent || '';
+    return /先自己建好|多花兩分鐘/.test(text);
+  });
+  check('第 3 步有講清楚三個值哪兩個可以公開、哪一個不行', () => {
+    const text = $('#panel-database')?.textContent || '';
+    return text.includes('sb_secret_') && text.includes('sb_publishable_')
+      && /絕對不要|萬能鑰匙/.test(text);
+  });
+  check('第 3 步列出了「下一步會用到這三個值」', () => {
+    return Boolean(document.getElementById('dbNextStepPanel'));
+  });
+  check('第 3 步有提醒 secret key 不會經過這個頁面', () => {
+    const text = document.getElementById('dbNextStepPanel')?.textContent || '';
+    return /不會經過這個頁面|這個頁面不會保存/.test(text);
+  });
+  check('第 3 步的表格裡有 secret key 那一列（要讓他知道還有第三個）', () => {
+    // 只看段落文字不夠：表格是會被「掃」過去的地方，
+    // 少一列的話他只會看到兩個，部署時就漏填第三個。
+    const rows = [...document.querySelectorAll('#dbNextStepPanel .env-name')];
+    return rows.some(row => row.textContent.includes('SUPABASE_SECRET_KEY'));
+  });
+  check('引導網頁「沒有」收集 secret key 的輸入欄位（那把不能進瀏覽器）', () => {
+    // 這是最重要的一條：secret key 等於資料庫的萬能鑰匙。
+    // 它只能填進 Vercel 的表單，絕對不能有一個 input 讓使用者貼進來 ——
+    // 一旦貼進來就會進 state、進 localStorage，留在磁碟上。
+    const fields = [...document.querySelectorAll('input[data-field]')];
+    return !fields.some(f => /secret/i.test(f.dataset.field || ''));
+  });
+
+  await fillField('supabaseUrl', SUPABASE);
+  await fillField('publishableKey', 'sb_publishable_' + 'a'.repeat(30));
+  await clickVerify('database');
+  check('填了資料庫網址與金鑰後，第 3 步驗證通過', () => {
+    return $('[data-result="database"]')?.dataset.state === 'pass';
+  });
+
   await goToStep('deploy');
 
-  // ============ 第 3 步：部署 ============
-  check('第 3 步有「一鍵部署」按鈕', () => Boolean($('#deployLink')));
+  // ============ 第 4 步：部署 ============
+  check('第 4 步有「一鍵部署」按鈕', () => Boolean($('#deployLink')));
   check('一鍵部署的網址指向 Vercel', () => String($('#deployLink')?.href || '').includes('vercel.com/new'));
   check('一鍵部署網址帶了 repository-url', () => String($('#deployLink')?.href || '').includes('repository-url='));
 
-  // 這一條是實際踩到的死路：全新的 Supabase 帳號按下一鍵部署，Vercel 回
-  //   「No Supabase organizations found
-  //    Create a Supabase organization before installing the Vercel integration.」
-  // 然後就卡住了。原因是 integration-ids 會讓那個整合變成「必要」——
-  // Vercel 文件：「required to be added before the Project can be imported」。
-  check('一鍵部署的資料庫整合是「可以跳過」的（不然新帳號會卡死）', () => {
+  // 這是這次改動的核心：部署表單要直接問那三個環境變數。
+  // 因為順序改成「先建資料庫」，使用者手上已經有值了 —— 沒有理由讓他
+  // 「部署完 → 進 Settings 填 → 再 Redeploy」。
+  check('一鍵部署網址帶了 env 參數（部署表單會直接問）', () => {
     const href = String($('#deployLink')?.href || '');
-    return href.includes('skippable-integrations=1');
+    return href.includes('env=SUPABASE_URL') && href.includes('SUPABASE_PUBLISHABLE_KEY')
+      && href.includes('SUPABASE_SECRET_KEY');
   });
-  check('第 3 步有寫「No Supabase organizations found」該怎麼辦', () => {
+
+  // 這裡是那個死路的結構性解法：不再帶 integration-ids，
+  // Vercel 就不會要求「先安裝 Supabase 整合」，也就不會卡在
+  // 「No Supabase organizations found」。
+  check('一鍵部署網址「沒有」要求安裝 Supabase 整合（那條路會卡死）', () => {
+    const href = String($('#deployLink')?.href || '');
+    return !href.includes('integration-ids=');
+  });
+  check('第 4 步有寫「No Supabase organizations found」不會出現', () => {
     const text = $('#panel-deploy')?.textContent || '';
-    return text.includes('No Supabase organizations found');
+    return /正常情況下不該出現/.test(text);
   });
-  check('第 3 步給的是可以直接點的建立組織連結', () => {
-    const link = $('#panel-deploy a[href*="supabase.com/dashboard"]');
-    return Boolean(link);
+
+  check('第 4 步有列出要填的三個環境變數', () => {
+    const text = document.getElementById('deployCheckPanel')?.parentElement?.textContent || '';
+    return text.includes('SUPABASE_URL') && text.includes('SUPABASE_SECRET_KEY');
   });
-  check('第 3 步有說「跳過資料庫網站也會架起來」（不要讓人以為非做不可）', () => {
-    const text = $('#panel-deploy')?.textContent || '';
-    return /跳過[^。]{0,20}(也會|還是|網站會)/.test(text) || /就算[^。]{0,10}跳過/.test(text);
+  check('第 4 步有「檢查網站連上了沒」按鈕', () => {
+    return Boolean(document.getElementById('dbVerifySiteBtn'));
+  });
+  check('第 4 步有準備「環境變數沒填」的補救說明', () => {
+    return Boolean(document.getElementById('deployEnvFix'));
+  });
+  check('補救說明有強調「一定要重新部署」', () => {
+    const text = document.getElementById('deployEnvFix')?.textContent || '';
+    return /一定要重新部署|Redeploy/.test(text);
   });
 
   await fillField('siteUrl', SITE);
   await clickVerify('deploy');
-  check('填了網站網址後，第 3 步驗證通過（部署成功）', () => {
+  check('填了網站網址後，第 4 步驗證通過（部署成功）', () => {
     return $('[data-result="deploy"]')?.dataset.state === 'pass';
-  });
-
-  await goToStep('database');
-
-  // ============ 第 4 步：Supabase ============
-  await fillField('supabaseUrl', SUPABASE);
-  await fillField('publishableKey', 'sb_publishable_' + 'a'.repeat(30));
-  check('貼了 secret 金鑰會立刻警告（這一步不該送出請求）',
-    () => typeof classifySupabaseKey === 'function' ? true : true);
-
-  await clickVerify('database');
-  check('填了資料庫網址與金鑰後，第 4 步驗證通過', () => {
-    return $('[data-result="database"]')?.dataset.state === 'pass';
   });
 
   await goToStep('schema');
@@ -239,35 +290,10 @@ async function journey() {
     const text = document.getElementById('panel-schema').textContent;
     return /不會有任何錯誤訊息|沒有任何錯誤訊息/.test(text);
   });
-  // 使用者實際撞到的情況：網站架起來了，首頁卻說「還沒連到資料庫」，
-  // 而他完全不知道為什麼 —— 因為引導網頁從來沒告訴他要填 Vercel 環境變數。
-  check('第 4 步有「把值填進 Vercel」這一段', () => {
-    return Boolean(document.getElementById('dbPushPanel'));
-  });
-  check('第 4 步寫出兩個環境變數的完整名稱', () => {
-    const text = document.getElementById('dbPushPanel')?.textContent || '';
-    return text.includes('SUPABASE_URL') && text.includes('SUPABASE_PUBLISHABLE_KEY');
-  });
-  check('第 4 步有講「一定要重新部署」（不然填了也不會生效）', () => {
-    const text = document.getElementById('dbPushPanel')?.textContent || '';
-    // 只出現「重新部署」四個字不夠 —— 這句話的重點是「一定要」。
-    // 少了那個強調，使用者很容易讀成「可以重新部署」然後就跳過了。
-    return /一定要重新部署|必須重新部署/.test(text);
-  });
-  check('第 4 步有解釋「為什麼」一定要重新部署', () => {
-    const text = document.getElementById('dbPushPanel')?.textContent || '';
-    // 講「部署時才讀進去」使用者才會信服；只說「要重新部署」會被當成官腔。
-    return /部署時.{0,6}讀|才會生效/.test(text);
-  });
-  check('第 4 步有「檢查我的網站連上了沒」按鈕', () => {
-    return Boolean(document.getElementById('dbVerifySiteBtn'));
-  });
-  check('第 4 步有「自動偵測我的資料庫」按鈕', () => {
+  // 自動偵測還在，但換了位置與定位：新流程走到第 3 步時還沒有網站，
+  // 所以它是給「回來重跑引導」的人用的次要路徑，不是主要路徑。
+  check('第 3 步還留著「從我的網站讀取」給回來重跑的人', () => {
     return Boolean(document.getElementById('dbAutoDetectBtn'));
-  });
-  check('第 4 步的自動偵測有說「不用去後台抄」', () => {
-    const text = document.getElementById('dbAutoPanel')?.textContent || '';
-    return /不用你?去?後台抄|不用.*抄/.test(text);
   });
   check('第 5 步有 ' + window.__expectedSegments + ' 段建表語法可複製（與 migration 檔數一致）',
     () => $$('#sqlSegments details').length === window.__expectedSegments);

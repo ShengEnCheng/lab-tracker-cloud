@@ -76,12 +76,20 @@ function report() {
     const text = $('setupBlockedSteps')?.textContent || '';
     return /部署時.{0,6}讀|只加變數不會/.test(text);
   });
-  check('有指引使用者回引導網頁第 4 步的「填進 Vercel」那一段', () => {
+  check('有指引使用者回引導網頁第 4 步（那裡有現成的複製按鈕）', () => {
     const text = $('setupBlockedSteps')?.textContent || '';
-    // 這個畫面上的人剛好卡在「不知道去哪拿那兩個值」。
-    // 引導網頁第 4 步有現成的複製按鈕，所以一定要把他指回那一小段，
-    // 而不是只說「回去第 4 步」—— 第 4 步資訊很多，他會再迷路一次。
-    return /第 4 步[^。]{0,40}把這兩個值填進 Vercel/.test(text);
+    // 這個畫面上的人剛好卡在「不知道去哪拿那幾個值」。
+    // 引導網頁第 4 步有一張表、有複製按鈕，所以一定要把他指回去，
+    // 而不是只說「去 Vercel 填」—— 他不知道要填什麼。
+    return /第 4 步[^。]{0,40}(複製程式碼並部署|複製按鈕)/.test(text);
+  });
+  check('三個環境變數都有點名（少一個都會壞）', () => {
+    const text = $('setupBlockedSteps')?.textContent || '';
+    // 少了 SUPABASE_SECRET_KEY，網站連得動資料庫但「第一次設定」會壞，
+    // 而且錯誤訊息一樣是「還沒連上資料庫」—— 完全指錯方向。
+    return text.includes('SUPABASE_URL')
+      && text.includes('SUPABASE_PUBLISHABLE_KEY')
+      && text.includes('SUPABASE_SECRET_KEY');
   });
 
   // --- 表單欄位齊全 ---

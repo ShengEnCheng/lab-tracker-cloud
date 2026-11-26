@@ -201,10 +201,10 @@ npm run test:auto-update  # 22 項：自動更新真的會跑嗎、會不會默�
 npm run test:update-policy # 24 項：研究室在介面上關掉自動更新，真的會停下來嗎
 npm run test:settings-ui  # 51 項：那顆開關在畫面上真的看得到、按得動、失敗會撥回去
 npm run test:checkup      # 33 項：使用者每天要做的事，逐一真的做一遍
-npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
-npm run test:journey      # 50 項：引導網頁從第 1 步真的走到第 7 步
-npm run test:ui           # 41 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（581 項）
+npm run test:wizard       # 33 項：引導網頁的 7 個步驟與版面
+npm run test:journey      # 54 項：引導網頁從第 1 步真的走到第 7 步
+npm run test:ui           # 42 項：headless Chrome 實際載入首頁
+npm run test:all          # 全部（587 項）
 ```
 
 ### 十三支測試各負責哪一段
@@ -497,6 +497,61 @@ Action 是 GitHub 的機器在跑，它沒有研究室的帳號密碼，所以�
 | --- | --- | --- |
 | repo → Settings → Secrets and variables → Actions → **Variables** | `LAB_SITE_URL` | `https://他們的網址` |
 
+## 為什麼引導網頁的「建立資料庫」排在「部署」之前
+
+接手的人如果覺得這個順序怪（大部分的教學都是「先部署、再建資料庫」），
+這是刻意的，而且改回去會踩到一條死路。
+
+### 原本的順序與它撞到的牆
+
+原本是「先部署 → 部署時順便建資料庫」。Vercel 的一鍵部署確實支援
+用官方整合在部署過程中開一個 Supabase 專案，聽起來最省事。
+
+但**全新的 Supabase 帳號按下去會看到**：
+
+```
+No Supabase organizations found
+Create a Supabase organization before installing the Vercel integration.
+```
+
+然後整個匯入流程停住 —— 不能繼續部署，連「跳過」都沒得按。
+
+原因是 Vercel 的 `integration-ids` 參數會讓那個整合變成**必要**的
+（官方文件：「required to be added before the Project can be imported」），
+而全新帳號沒有任何 organization 可以安裝。
+
+先後修過兩次，都不夠好：
+1. 加 `skippable-integrations=1` 讓它可以跳過 —— 能繼續部署了，
+   但資料庫還是得另外建，而且使用者得自己回頭填環境變數。
+2. 在引導網頁寫清楚怎麼補 —— 治標，人還是會卡。
+
+### 現在的順序，以及為什麼它更好
+
+改成「**先建資料庫（第 3 步）→ 再部署（第 4 步）**」：
+
+- 使用者先在 Supabase 建好專案，手上就有三個金鑰
+- 部署時把這三個值填進 Vercel 的部署表單
+  （用 Deploy Button 的 `env` 參數，見 `wizard/config.js` 的 `requiredEnvVars`）
+- 網站建起來的**當下**就是完整可用的
+
+關鍵是**部署網址不再帶 `integration-ids`**。Vercel 就不會要求安裝整合，
+那條死路在結構上就不存在了 —— 不是「可以跳過」，是根本不會走到。
+
+### 順帶解決的另一件事
+
+原本「部署完才填環境變數」有個很容易卡住的地方：環境變數是**部署時**
+才讀進去的，在 Settings 補完之後一定要按 Redeploy 才會生效。
+很多人填了、也存了，但網站還是說「還沒連到資料庫」，因為少按了那一次。
+
+改成部署前填，這個坑就不存在了。
+
+### 如果真的要改回去
+
+可以，但至少要保留兩件事：
+1. `integration-ids` 一定要搭配 `skippable-integrations=1`
+2. 引導網頁第 4 步的「檢查網站連上了沒」不能拿掉 ——
+   那是整個流程裡唯一會驗「網站 → 資料庫」這一段的地方
+
 引導網頁第 7 步有寫這段，會自動帶入他們自己的網址。
 
 > **沒填也不會壞。** 腳本查不到網站網址時會**照常更新**（維持原本行為）。
@@ -677,7 +732,7 @@ curl https://你的網址/api/setup-status
 **上線前一定要做的（沒做就不能用）**
 
 - [ ] **範本 repo 已建立並 push，而且是 public**
-      引導網頁第 3 步的「一鍵部署」會叫 Vercel 去這個 repo 複製程式碼。
+      引導網頁第 4 步的「一鍵部署」會叫 Vercel 去這個 repo 複製程式碼。
       repo 不存在或不是 public，助理按下去只會看到一句看不懂的錯誤。
       確認方式：用「沒有登入 GitHub」的瀏覽器打開
       `https://github.com/<你的帳號>/lab-tracker-cloud`，看得到內容才算數。
@@ -689,7 +744,7 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（581 項）
+- [ ] `npm run test:all` 全綠（587 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
 - [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那幾段

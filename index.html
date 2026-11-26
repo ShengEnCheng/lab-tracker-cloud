@@ -4945,12 +4945,14 @@ td.sticky-col {
         environment: {
           text: '網站執行起來了，但還沒連到資料庫。這代表「網站 → 資料庫」這一段還沒接上。',
           steps: [
-            '回到引導網頁第 4 步（建立 Supabase 資料庫），最下面有一段「把這兩個值填進 Vercel」。',
-            '到 Vercel 專案 → Settings → Environment Variables，確認 <code>SUPABASE_URL</code> 與 <code>SUPABASE_PUBLISHABLE_KEY</code> 這兩個變數都有值。'
-              + '引導網頁上有現成的複製按鈕，不用自己打字。',
+            '回引導網頁第 4 步（複製程式碼並部署），那裡有一張表列出要填的三個環境變數，'
+              + '前兩個有現成的複製按鈕，不用自己打字。',
+            '到 Vercel 專案 → Settings → Environment Variables，確認這三個都有值：'
+              + '<code>SUPABASE_URL</code>、<code>SUPABASE_PUBLISHABLE_KEY</code>、'
+              + '<code>SUPABASE_SECRET_KEY</code>。',
             '<strong>填好之後一定要 Redeploy。</strong>環境變數是「部署時」才讀進去的，'
               + '只加變數不會讓已經在跑的網站知道 —— 這是這個畫面最常見的原因。',
-            '重新部署完，回到引導網頁第 4 步（建立 Supabase 資料庫），按「檢查我的網站連上了沒」確認。',
+            '重新部署完，回引導網頁第 4 步按「檢查網站連上了沒」確認。',
             '還是不行，把這個網址給維護者，附上你看到的畫面。'
           ]
         },

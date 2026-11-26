@@ -59,8 +59,12 @@ function report() {
   const navButtons = $$('#stepNav button, #stepNav a');
   check('導覽項目可以點', () => navButtons.length === 7);
   if (navButtons.length === 7) {
+    // 第 3 項＝建立資料庫、第 4 項＝複製程式碼並部署。
+    // （順序是刻意的：先建資料庫，部署時才有三個值可以填。）
+    navButtons[2].click();
+    check('點第 3 項會切到「建立資料庫」', () => visiblePanels().some(p => p.dataset.panel === 'database'));
     navButtons[3].click();
-    check('點第 4 項會切到第 4 步', () => visiblePanels().some(p => p.dataset.panel === 'database'));
+    check('點第 4 項會切到「複製程式碼並部署」', () => visiblePanels().some(p => p.dataset.panel === 'deploy'));
     navButtons[0].click();
   }
 

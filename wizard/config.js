@@ -9,7 +9,7 @@
 export const TEMPLATE = {
   // 範本程式碼所在的公開 repo（維護者改成自己的）。
   //
-  // 這個 repo 必須真的存在、而且是公開的，否則第 3 步的「一鍵部署」會失敗：
+  // 這個 repo 必須真的存在、而且是公開的，否則第 4 步的「一鍵部署」會失敗：
   // Vercel 去 GitHub 找不到這個 repo，助理會看到一句看不懂的錯誤。
   //
   // 上線前請確認：
@@ -19,8 +19,22 @@ export const TEMPLATE = {
   //
   // `npm run check` 會檢查這一行：格式不對是錯誤，還留著預設值則是提醒。
   repoUrl: 'https://github.com/ShengEnCheng/lab-tracker-cloud',
-  // Supabase 官方的 Vercel 整合 ID（公開值，不要改）
+  // Supabase 官方的 Vercel 整合 ID。留著只是為了「使用者想走官方整合」時
+  // 還能當備案；預設流程**不再使用它**（原因見下面 requiredEnvVars 的說明）。
   supabaseIntegrationId: 'oac_VqOgBHqhEoFTPzGkPd7L0iH6',
+
+  // 網站執行時需要的環境變數。順序就是「一鍵部署」表單上出現的順序。
+  //
+  // 為什麼是這三個、而且一個都不能少：
+  //   SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY → 網站要連資料庫
+  //   SUPABASE_SECRET_KEY → 建立第一個管理員帳號時要寫入受保護的資料表
+  //     （api/setup.js 的 handleStatus/handleSetup 都用 supabaseConfig(true)，
+  //      少了它，網站連得動資料庫但「第一次設定」那一步會直接壞掉，
+  //      而且畫面只會說「還沒連上資料庫」——完全指錯方向。）
+  //
+  // 這三個值都只有使用者自己拿得到，所以引導網頁的工作是「陪他去 Supabase
+  // 後台把值抄回來、幫他貼進部署表單」，而不是假裝能幫他查。
+  requiredEnvVars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY'],
   // 部署後的預設專案名稱
   defaultProjectName: 'lab-tracker',
   appDisplayName: '研究室追蹤系統'

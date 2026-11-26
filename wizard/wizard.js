@@ -25,11 +25,24 @@ import { TEMPLATE, WIZARD } from './config.js';
 // 這樣程式碼比較好讀，也比較不會因為調整順序而出錯。
 // -----------------------------------------------------------------------------
 
+// 步驟順序。**「建立資料庫」排在「複製程式碼並部署」之前**，這是刻意的。
+//
+// 原本的順序是先部署、再建資料庫 —— 因為 Vercel 的「一鍵部署」可以順便
+// 幫你建一個 Supabase 專案（官方整合）。但實際跑下來，那條路會死：
+// 全新的 Supabase 帳號沒有任何 organization，Vercel 回
+//   「No Supabase organizations found
+//    Create a Supabase organization before installing the Vercel integration.」
+// 然後整個匯入流程停住，連「跳過」都沒得按。
+//
+// 把順序倒過來之後，那條死路在結構上就不存在了：
+// 使用者先在 Supabase 建好專案、拿到三個金鑰，再按一鍵部署。
+// 部署時他手上有值可以直接填進表單（見 buildDeployUrl 的 env 參數），
+// 網站建起來的當下就是完整可用的 —— 也就完全不需要那個整合了。
 export const STEPS = [
   { id: 'start', number: 1, navLabel: '開始之前', panelTitle: '開始之前：你會得到什麼' },
   { id: 'github', number: 2, navLabel: '建立 GitHub 帳號', panelTitle: '建立一個 GitHub 帳號' },
-  { id: 'deploy', number: 3, navLabel: '複製程式碼並部署', panelTitle: '把程式碼複製一份，變成你的網站' },
-  { id: 'database', number: 4, navLabel: '建立資料庫', panelTitle: '建立資料庫（Supabase）' },
+  { id: 'database', number: 3, navLabel: '建立資料庫', panelTitle: '建立資料庫（Supabase）' },
+  { id: 'deploy', number: 4, navLabel: '複製程式碼並部署', panelTitle: '把程式碼複製一份，變成你的網站' },
   { id: 'schema', number: 5, navLabel: '建立資料表', panelTitle: '在資料庫裡建立資料表' },
   { id: 'admin', number: 6, navLabel: '建立管理員帳號', panelTitle: '建立你自己的管理員帳號' },
   { id: 'done', number: 7, navLabel: '完成了', panelTitle: '完成了！' }
@@ -42,8 +55,8 @@ const STEP_IDS = STEPS.map(step => step.id);
 const STEP_ALIASES = {
   '0': 'start', start: 'start', intro: 'start', begin: 'start',
   '1': 'github', github: 'github', githubaccount: 'github', account: 'github',
-  '2': 'deploy', deploy: 'deploy', vercel: 'deploy', site: 'deploy',
-  '3': 'database', database: 'database', supabase: 'database', db: 'database',
+  '2': 'database', database: 'database', supabase: 'database', db: 'database',
+  '3': 'deploy', deploy: 'deploy', vercel: 'deploy', site: 'deploy',
   '4': 'schema', schema: 'schema', tables: 'schema', sql: 'schema', migration: 'schema',
   '5': 'admin', admin: 'admin', account_setup: 'admin', setup: 'admin', owner: 'admin',
   '6': 'done', done: 'done', finish: 'done', complete: 'done', end: 'done'
@@ -82,9 +95,13 @@ export function resolveStepId(stepId) {
  * @param {string} [options.projectName]  Vercel 專案名稱（會自動清成合法字元）
  * @param {string} [options.repositoryName] 複製到使用者 GitHub 後的 repo 名稱
  * @param {string} [options.integrationId] Supabase 官方整合 ID（oac_ 開頭）
+ * @param {string[]} [options.envKeys] 部署時要請使用者填的環境變數名稱
+ * @param {object} [options.envDefaults] 非敏感變數的預設值（會預先填好）
+ * @param {string} [options.envDescription] 在部署表單上說明這些變數要填什麼
+ * @param {string} [options.envLink] 說明這些變數去哪拿的連結
  * @returns {string} 形如 https://vercel.com/new/clone?repository-url=...
  */
-export function buildDeployUrl({ repoUrl, projectName, repositoryName, integrationId } = {}) {
+export function buildDeployUrl({ repoUrl, projectName, repositoryName, integrationId, envKeys, envDefaults, envDescription, envLink } = {}) {
   const cleanRepoUrl = sanitizeRepoUrl(repoUrl);
   if (!cleanRepoUrl) {
     throw new TypeError('buildDeployUrl 需要一個有效的 repoUrl（例如 https://github.com/帳號/專案）');
@@ -100,25 +117,59 @@ export function buildDeployUrl({ repoUrl, projectName, repositoryName, integrati
   params.set('project-name', project);
   params.set('repository-name', repository);
 
+  // 環境變數：直接在 Vercel 的部署表單上請使用者填。
+  //
+  // 這是「先建資料庫、再部署」這個順序的關鍵。使用者在前一步已經拿到
+  // 三個值，這裡請他貼進來，網站建好當下就是完整可用的 ——
+  // 不必「部署完 → 進 Settings 填變數 → 回 Deployments 重新部署」。
+  //
+  // 這一步不能省：環境變數是「部署時」才讀進去的。沒有這個參數的話，
+  // 使用者會在網站已經跑起來之後才發現畫面說「還沒連到資料庫」，
+  // 而畫面上沒有任何線索告訴他要填什麼、填在哪。
+  const keys = Array.isArray(envKeys)
+    ? envKeys.map(key => String(key || '').trim()).filter(Boolean)
+    : [];
+  if (keys.length > 0) {
+    params.set('env', keys.join(','));
+
+    // envDescription / envLink 會直接顯示在 Vercel 的部署表單上，
+    // 使用者填的時候就看得到「這三個值去哪裡拿」——不用回頭翻引導網頁。
+    const description = typeof envDescription === 'string' ? envDescription.trim() : '';
+    if (description) params.set('envDescription', description);
+    const link = typeof envLink === 'string' ? envLink.trim() : '';
+    if (link) params.set('envLink', link);
+
+    // envDefaults 只放「非敏感」的值。這三個都是憑證，一律不給預設值，
+    // 讓欄位空著由使用者自己貼 —— 給預設值等於暗示他可以跳過。
+  }
+
+  // 非敏感的預設值（目前沒有）。留著這個入口是為了以後加設定開關時用，
+  // 例如要不要啟用示範資料。文件明確要求只放非敏感值。
+  if (envDefaults && typeof envDefaults === 'object') {
+    const entries = Object.entries(envDefaults)
+      .filter(([key, value]) => keys.includes(key) && typeof value === 'string');
+    if (entries.length > 0) {
+      params.set('envDefaults', JSON.stringify(Object.fromEntries(entries)));
+    }
+  }
+
+  // 官方整合：只有在呼叫端明確要求時才帶。
+  //
+  // 預設流程**不使用**它，原因是實際踩到的那個死路：
+  //   全新 Supabase 帳號按下一鍵部署，Vercel 回
+  //     「No Supabase organizations found
+  //      Create a Supabase organization before installing the Vercel integration.」
+  //   然後整個匯入流程停住 —— 不能繼續部署、連「跳過」都沒得按。
+  // Vercel 文件寫得很清楚：帶了 integration-ids，那個整合就是
+  //   「required to be added before the Project can be imported」。
+  //
+  // 現在的做法是把順序倒過來：先建 Supabase，再部署。使用者手上已經有
+  // 專案和三個金鑰，根本不需要整合再幫他建一個 —— 所以也就不會走到那條
+  // 會卡死的路。這裡保留參數只是給「想走官方整合」的人一個備案。
   const integration = typeof integrationId === 'string' ? integrationId.trim() : '';
   if (integration) {
-    // integration-ids 是「Vercel 會要求你安裝的整合」。
-    // 帶了它，部署流程才會問你要不要建資料庫（第 4 步）。
     params.set('integration-ids', integration);
-
-    // 但**不能讓它變成硬性關卡**。
-    //
-    // 實際踩到的情況：全新的 Supabase 帳號按下一鍵部署，Vercel 回
-    //   「No Supabase organizations found
-    //    Create a Supabase organization before installing the Vercel integration.」
-    // 然後就卡住了 —— 不能繼續部署、也不知道「organization」是什麼。
-    // Vercel 文件寫得很清楚：帶了 integration-ids，那個整合就是
-    // 「required to be added before the Project can be imported」。
-    //
-    // 加上 skippable-integrations 之後，使用者可以選擇「現在不接資料庫，
-    // 之後再接」。網站會先部署起來，首頁顯示「還沒連上資料庫」，
-    // 第 4 步再帶他把 Supabase 接上去。
-    //
+    // 就算真的用了，也一定要讓它可以跳過。
     // 寧可多幾個手動步驟，也不要讓人卡在一個看不懂的紅字前面動彈不得。
     params.set('skippable-integrations', '1');
   }
@@ -919,6 +970,11 @@ const STORAGE_KEY = 'lab-tracker-deployment-wizard:v1';
 
 // 只有這些欄位會被寫進 localStorage。publishable key 是「可以公開」的金鑰，
 // 但我們仍然只把它存在使用者自己的瀏覽器裡，不出現在任何檔案中。
+//
+// **secret key 刻意不在這份清單裡，而且引導網頁從頭到尾不會要它。**
+// 那把等於資料庫的萬能鑰匙，一旦進了 localStorage 就會留在磁碟上，
+// 也會被任何在同一個網域執行的程式讀到。正確做法是請使用者直接在
+// Vercel 的部署表單上填（第 4 步的三個欄位之一），不經過這個頁面。
 const PERSISTED_FIELDS = ['githubUsername', 'siteUrl', 'supabaseUrl', 'publishableKey'];
 
 function createEmptyState() {
@@ -990,11 +1046,13 @@ function collectElements(doc) {
     dbAutoDetectBtn: doc.getElementById('dbAutoDetectBtn'),
     dbAutoNote: doc.getElementById('dbAutoNote'),
     dbAutoResult: doc.getElementById('dbAutoResult'),
-    dbManualTitle: doc.getElementById('dbManualTitle'),
     dbEnvUrl: doc.getElementById('dbEnvUrl'),
     dbEnvKey: doc.getElementById('dbEnvKey'),
+    deployEnvUrl: doc.getElementById('deployEnvUrl'),
+    deployEnvKey: doc.getElementById('deployEnvKey'),
     dbVerifySiteBtn: doc.getElementById('dbVerifySiteBtn'),
-    dbVerifySiteResult: doc.getElementById('dbVerifySiteResult')
+    dbVerifySiteResult: doc.getElementById('dbVerifySiteResult'),
+    deployEnvFix: doc.getElementById('deployEnvFix')
   };
 }
 
@@ -1274,24 +1332,26 @@ function syncDynamicText(elements, state) {
   const siteUrl = normalizeSiteUrl(state.siteUrl);
   // 第 4 步「填進 Vercel」那張表：直接顯示使用者自己填的值，
   // 讓他可以整段複製，不用回頭找、也不用重打字。
-  if (elements.dbEnvUrl) {
-    const value = normalizeSupabaseUrl(state.supabaseUrl);
-    elements.dbEnvUrl.textContent = value || '（先在上面填好資料庫網址）';
-    if (value) elements.dbEnvUrl.dataset.raw = value;
-    else delete elements.dbEnvUrl.dataset.raw;
+  // 兩張表（第 3 步與第 4 步）顯示同樣的兩個值。
+  // 第 4 步那張是給「按下部署前」再看一眼用的，所以兩邊要同步。
+  const urlValue = normalizeSupabaseUrl(state.supabaseUrl);
+  for (const node of [elements.dbEnvUrl, elements.deployEnvUrl]) {
+    if (!node) continue;
+    node.textContent = urlValue || '（還沒填）';
+    if (urlValue) node.dataset.raw = urlValue;
+    else delete node.dataset.raw;
   }
-  if (elements.dbEnvKey) {
-    const value = String(state.publishableKey || '').trim();
-    // 金鑰很長，整串顯示會把版面撐壞；只顯示頭尾，複製時仍是完整值。
-    if (value) {
-      elements.dbEnvKey.textContent = value.length > 24
-        ? `${value.slice(0, 14)}…${value.slice(-6)}`
-        : value;
-      elements.dbEnvKey.dataset.raw = value;
-    } else {
-      elements.dbEnvKey.textContent = '（先在上面填好金鑰）';
-      delete elements.dbEnvKey.dataset.raw;
-    }
+
+  const keyValue = String(state.publishableKey || '').trim();
+  // 金鑰很長，整串顯示會把版面撐壞；只顯示頭尾，但複製時仍是完整值。
+  const keyLabel = keyValue
+    ? (keyValue.length > 24 ? `${keyValue.slice(0, 14)}…${keyValue.slice(-6)}` : keyValue)
+    : '（還沒填）';
+  for (const node of [elements.dbEnvKey, elements.deployEnvKey]) {
+    if (!node) continue;
+    node.textContent = keyLabel;
+    if (keyValue) node.dataset.raw = keyValue;
+    else delete node.dataset.raw;
   }
 
   if (elements.doneSiteUrlHint) {
@@ -1443,10 +1503,21 @@ function resolveCopyText(button) {
 
 function resolveDeployUrl() {
   try {
+    // 注意：這裡**刻意不帶 integrationId**。
+    //
+    // 流程的順序是「先建 Supabase（第 3 步）→ 再部署（第 4 步）」，
+    // 所以使用者按部署時，手上已經有專案和三個金鑰了。
+    // 不需要、也不想要整合再幫他建第二個資料庫。
+    //
+    // 這一點很重要：一旦帶了 integration-ids，Vercel 就要求「先安裝整合
+    // 才能匯入專案」，而全新帳號沒有一個 organization 可以裝 —— 那就是
+    // 「No Supabase organizations found」那條死路。不帶這個參數，
+    // 那條路根本不存在。
     return buildDeployUrl({
       repoUrl: TEMPLATE.repoUrl,
       projectName: TEMPLATE.defaultProjectName,
-      integrationId: TEMPLATE.supabaseIntegrationId
+      envKeys: TEMPLATE.requiredEnvVars,
+      envDescription: '這三個值在 Supabase 後台 Settings → API Keys 找得到。'
     });
   } catch {
     return '';
@@ -1940,6 +2011,12 @@ function bindSiteBackendCheck(elements, state) {
     }
 
     show(outcome.tone, outcome.message);
+
+    // 明確失敗時，把「怎麼補」也打開。不這樣做的話，使用者看到
+    // 「還沒連上資料庫」只會卡住 —— 那正是上一輪的實際狀況。
+    if (elements.deployEnvFix) {
+      elements.deployEnvFix.hidden = outcome.tone !== 'error';
+    }
   });
 }
 
@@ -2000,9 +2077,9 @@ export async function checkSiteBackend(siteUrl) {
   return {
     tone: 'error',
     message: `${escapeHtml(detail || '你的網站還沒連上資料庫。')}<br>`
-      + '代表上面那兩個環境變數<strong>還沒填、或填了但沒有重新部署</strong>。'
+      + '代表三個環境變數有一邊對不上 —— <strong>沒填、填錯、或填了但沒有重新部署</strong>。'
       + '環境變數是「部署時」才讀進去的，只加變數不會讓已經跑起來的網站知道。'
-      + '請照上面第 3 個動作按一次 Redeploy，再回來按這個按鈕。'
+      + '照下面「補救方式」做一次就好。'
   };
 }
 
@@ -2453,7 +2530,8 @@ function renderDeploySection(elements) {
       ['repository-url', TEMPLATE.repoUrl, '要複製的程式碼來源。你的 GitHub 會多一份自己的副本。'],
       ['project-name', TEMPLATE.defaultProjectName, 'Vercel 上這個專案的名字，也是網址的一部分。'],
       ['repository-name', TEMPLATE.defaultProjectName, '複製到你 GitHub 後，那個 repo 要叫什麼名字。'],
-      ['integration-ids', TEMPLATE.supabaseIntegrationId, 'Supabase 官方整合的編號。帶了這個，部署流程才會問你要不要建資料庫（第 4 步）。'],
+      ['env', TEMPLATE.requiredEnvVars.join(','), '部署時要填的三個環境變數。填好之後，網站建起來當下就是完整可用的。'],
+      ['envDescription', '這三個值在你的 Supabase 專案後台 Settings → API Keys 找得到。', '在部署表單上說明那三個值去哪裡拿。'],
       ['external-id', TEMPLATE.repoUrl, '只是讓 Vercel 後台知道「這個部署從哪來的」，不影響功能。']
     ];
     paramList.innerHTML = rows.map(([name, value, explain]) => (

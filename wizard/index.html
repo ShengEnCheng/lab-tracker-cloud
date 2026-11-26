@@ -645,10 +645,237 @@ update public.lab_settings
       </section>
 
       <!-- ==============================================================
-           第 3 步：複製程式碼並部署
+           第 3 步：建立資料庫（Supabase）
+           ============================================================== -->
+      <section class="panel" data-panel="database" id="panel-database">
+        <div class="panel-kicker">第 3 步</div>
+        <h2>建立資料庫（Supabase）</h2>
+
+        <div class="prereq-banner" data-prerequisite hidden></div>
+
+        <div class="prose">
+          <p>
+            資料庫就是放資料的地方。這一步<strong>先建好資料庫</strong>，
+            因為下一步部署時，你會需要把這裡拿到的三個值填進去。
+          </p>
+          <p class="plain-hint">
+            先建資料庫、再部署，可以少走一段冤枉路：網站建起來的當下就是完整可用的，
+            不必「先部署 → 發現連不上 → 再回頭填設定 → 重新部署」。
+          </p>
+        </div>
+
+        <!-- 為什麼先建資料庫：這是整個流程的關鍵決定，寫清楚讓使用者知道
+             不是隨便排的。也讓他遇到「怎麼跟別人的教學不一樣」時有個依據。 -->
+        <div class="callout callout--info">
+          <h3>為什麼不是「部署時順便建」？</h3>
+          <p>
+            Vercel 的一鍵部署有一個選項，可以在部署時順便幫你開一個 Supabase 專案。
+            聽起來很方便，但<strong>全新的 Supabase 帳號會卡在那裡</strong>：
+            Vercel 會說「找不到你的 Supabase 組織」，然後整個流程停住，連跳過都沒得按。
+          </p>
+          <p class="plain-hint" style="margin-top:8px">
+            所以這裡改成「先自己建好，再去部署」。多花兩分鐘，
+            但不會卡住，而且等一下那三個值可以直接填進部署表單。
+          </p>
+        </div>
+
+        <h3 class="section-title">建一個 Supabase 專案（約 3 分鐘）</h3>
+
+        <ol class="action-list">
+          <li>
+            打開 <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer">Supabase 後台</a>，
+            用 GitHub 帳號登入（跟剛剛辦的是同一個，可以直接按 Continue with GitHub）。
+            <span class="plain-hint">
+              第一次登入如果問你要不要建立「組織（organization）」，就建一個。
+              組織只是「把專案放在一起的資料夾」，免費方案就夠用，不會收錢。
+            </span>
+          </li>
+          <li>
+            按 <strong>New project</strong>（建立新專案）。
+            <span class="plain-hint">如果畫面要你先選組織，選剛剛那個就好。</span>
+          </li>
+          <li>
+            填三樣東西：
+            <ul>
+              <li><strong>Name</strong>：專案名稱，隨便取（例如 <code>lab-tracker</code>）</li>
+              <li><strong>Database Password</strong>：按「Generate a password」產生一組，然後
+                <strong>先貼到記事本存起來</strong>
+                <span class="plain-hint">
+                  這組密碼是資料庫管理員在用的，這份引導後面的步驟<strong>不會用到</strong>它，
+                  但弄丟了很麻煩，所以先存著。
+                </span>
+              </li>
+              <li><strong>Region</strong>：選 <strong>Southeast Asia (Singapore)</strong>
+                <span class="plain-hint">離台灣最近，速度最快。選錯也可以用，只是慢一點。</span>
+              </li>
+            </ul>
+          </li>
+          <li>
+            按 <strong>Create new project</strong>，等它建好（大約 1～2 分鐘）。
+          </li>
+          <li>
+            建好之後，左側選單最下面 <strong>Project Settings</strong>（齒輪）→
+            <strong>API Keys</strong>。這裡有三個值，等一下都會用到。
+          </li>
+        </ol>
+
+        <div class="callout callout--warn">
+          <h3>三個值，兩個可以公開、一個絕對不行</h3>
+          <p>你在 API Keys 那一頁會看到三個值，它們的用途完全不同：</p>
+          <ul>
+            <li>
+              <strong>Project URL</strong>（<code>https://xxxx.supabase.co</code>）：
+              資料庫的地址。可以公開。
+            </li>
+            <li>
+              <strong>Publishable key</strong>（<code>sb_publishable_…</code>）：
+              給網頁用的金鑰，權限很低，讀不到任何資料。可以公開。
+            </li>
+            <li>
+              <strong>Secret key</strong>（<code>sb_secret_…</code>）：
+              <strong>等於資料庫的萬能鑰匙</strong>，可以繞過所有權限規則。
+              它只能填進 Vercel 的環境變數，<strong>絕對不要</strong>貼到任何公開的地方、
+              不要傳到群組、也不要貼進這個引導網頁。
+            </li>
+          </ul>
+          <p class="plain-hint" style="margin-top:8px">
+            舊版的 Supabase 把這兩把金鑰叫 <code>anon</code> 和 <code>service_role</code>，
+            對應關係一樣：<code>anon</code> → publishable、<code>service_role</code> → secret。
+          </p>
+        </div>
+
+        <h3 class="section-title">先確認資料庫活著</h3>
+
+        <div class="prose">
+          <p>
+            把前兩個值貼在下面，我幫你確認資料庫連得到。
+            <strong>第三個（secret key）不要貼在這裡</strong> ——
+            下一步部署時再填進 Vercel 的欄位就好。
+          </p>
+        </div>
+
+        <div class="field">
+          <label for="field-supabaseUrl">你的 Supabase 專案網址</label>
+          <div class="field-row">
+            <input
+              class="field-input"
+              id="field-supabaseUrl"
+              type="text"
+              data-field="supabaseUrl"
+              data-field-step="database"
+              placeholder="例如 https://abcdefghijkl.supabase.co"
+              autocomplete="off"
+              autocapitalize="none"
+              autocorrect="off"
+              spellcheck="false">
+          </div>
+          <span class="field-hint">
+            就是上面那個 <strong>Project URL</strong>。貼 <code>/rest/v1</code> 之類的尾巴也沒關係，我會自動去掉。
+          </span>
+        </div>
+
+        <div class="field">
+          <label for="field-publishableKey">你的 publishable key（可以公開的那把）</label>
+          <div class="field-row">
+            <input
+              class="field-input"
+              id="field-publishableKey"
+              type="text"
+              data-field="publishableKey"
+              data-field-step="database"
+              placeholder="sb_publishable_…"
+              autocomplete="off"
+              autocapitalize="none"
+              autocorrect="off"
+              spellcheck="false">
+          </div>
+          <span class="field-hint">
+            找 <code>sb_publishable_</code> 開頭的那一串。
+            <strong>不是</strong> <code>sb_secret_</code> 開頭的那把。
+            這把金鑰只會存在你自己的瀏覽器裡。
+          </span>
+          <span class="field-warning" id="keyWarning" hidden role="alert"></span>
+        </div>
+
+        <div class="verify-row">
+          <button type="button" class="btn btn-verify" data-verify="database">驗證連線</button>
+          <span class="plain-hint" style="margin:0">
+            我會去你的資料庫問一句「你還好嗎」，確認連得到。
+          </span>
+        </div>
+
+        <div class="result" data-result="database" hidden></div>
+
+        <!-- 自動偵測：新流程走到這裡時還沒有網站，所以它不是主要路徑。
+             但「已經部署過、回來重跑引導」的人（例如換了資料庫專案）
+             用它最省事 —— 網站自己就知道那兩個值。 -->
+        <div class="callout" id="dbAutoPanel">
+          <h3>已經有網站了？讓它自己告訴我</h3>
+          <p class="plain-hint">
+            如果你是<strong>回來重跑</strong>這份引導（網站已經架好、也接過資料庫），
+            就不用再去後台抄了 —— 按一下，我直接問你的網站。
+          </p>
+          <div class="db-auto-row">
+            <button type="button" class="btn btn-secondary" id="dbAutoDetectBtn">從我的網站讀取</button>
+            <span class="db-auto-note" id="dbAutoNote">需要先填過第 4 步的網站網址。</span>
+          </div>
+          <div class="db-auto-result" id="dbAutoResult" hidden></div>
+        </div>
+
+        <!-- 下一步要用的三個值：先列出來讓他知道「還缺哪一個、要留著」。
+             secret key 只顯示名稱，引導網頁永遠不接收它的值。 -->
+        <div class="callout callout--action" id="dbNextStepPanel">
+          <h3>下一步會用到這三個值</h3>
+          <p>
+            驗證通過之後，往下一步走。部署的時候，Vercel 的表單會請你填這三個：
+          </p>
+          <div class="env-table" role="table" aria-label="部署時要填的三個環境變數">
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_URL</code></div>
+              <div class="env-value" role="cell"><code id="dbEnvUrl">（還沒填）</code></div>
+              <div class="env-copy" role="cell">
+                <button type="button" class="btn btn-copy" id="dbEnvUrlCopy"
+                        data-copy="element" data-copy-target="#dbEnvUrl">複製</button>
+              </div>
+            </div>
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_PUBLISHABLE_KEY</code></div>
+              <div class="env-value" role="cell"><code id="dbEnvKey">（還沒填）</code></div>
+              <div class="env-copy" role="cell">
+                <button type="button" class="btn btn-copy" id="dbEnvKeyCopy"
+                        data-copy="element" data-copy-target="#dbEnvKey">複製</button>
+              </div>
+            </div>
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_SECRET_KEY</code></div>
+              <div class="env-value" role="cell">
+                <code class="secret-hold">（請自己從 Supabase 複製，這個頁面不會保存它）</code>
+              </div>
+              <div class="env-copy" role="cell">
+                <a class="btn btn-copy" href="https://supabase.com/dashboard" target="_blank"
+                   rel="noopener noreferrer">去複製</a>
+              </div>
+            </div>
+          </div>
+          <p class="plain-hint" style="margin-top:12px">
+            前兩個我幫你記著了，按複製就好。
+            第三個（secret）請你<strong>現在就從 Supabase 那一頁複製起來放著</strong>，
+            下一步貼進 Vercel 的表單 —— 它不會經過這個頁面，也就沒有機會留在你的瀏覽器裡。
+          </p>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn btn-secondary" data-nav-prev>← 上一步</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-primary" data-nav-next>下一步：複製程式碼並部署 →</button>
+        </div>
+      </section>
+
+      <!-- ==============================================================
+           第 4 步：複製程式碼並部署
            ============================================================== -->
       <section class="panel" data-panel="deploy" id="panel-deploy">
-        <div class="panel-kicker">第 3 步</div>
+        <div class="panel-kicker">第 4 步</div>
         <h2>把程式碼複製一份，變成你的網站</h2>
 
         <div class="prereq-banner" data-prerequisite hidden></div>
@@ -663,6 +890,48 @@ update public.lab_settings
           </ul>
           <p class="plain-hint">
             不會動到别人的東西，也不會覆蓋任何現有的網站。整個過程不需要你輸入任何程式碼。
+          </p>
+        </div>
+
+        <!-- 這一步的關鍵：部署表單會直接問那三個環境變數。
+             因為順序改成「先建資料庫」，使用者手上已經有值了。 -->
+        <div class="callout callout--action">
+          <h3>先準備好這三個值（等一下要貼）</h3>
+          <p>
+            按下去之後，Vercel 的表單會請你填三個環境變數。
+            前兩個我幫你記著了，第三個要你自己從 Supabase 複製：
+          </p>
+          <div class="env-table" role="table" aria-label="部署時要填的三個環境變數">
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_URL</code></div>
+              <div class="env-value" role="cell"><code id="deployEnvUrl">（還沒填）</code></div>
+              <div class="env-copy" role="cell">
+                <button type="button" class="btn btn-copy" id="deployEnvUrlCopy"
+                        data-copy="element" data-copy-target="#deployEnvUrl">複製</button>
+              </div>
+            </div>
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_PUBLISHABLE_KEY</code></div>
+              <div class="env-value" role="cell"><code id="deployEnvKey">（還沒填）</code></div>
+              <div class="env-copy" role="cell">
+                <button type="button" class="btn btn-copy" id="deployEnvKeyCopy"
+                        data-copy="element" data-copy-target="#deployEnvKey">複製</button>
+              </div>
+            </div>
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_SECRET_KEY</code></div>
+              <div class="env-value" role="cell">
+                <code class="secret-hold">（你剛剛從 Supabase 複製的那把）</code>
+              </div>
+              <div class="env-copy" role="cell">
+                <a class="btn btn-copy" href="https://supabase.com/dashboard" target="_blank"
+                   rel="noopener noreferrer">沒存到？回去拿</a>
+              </div>
+            </div>
+          </div>
+          <p class="plain-hint" style="margin-top:12px">
+            三個都填好，網站建起來<strong>當下就是完整可用的</strong> ——
+            不用再回頭設環境變數、也不用重新部署一次。
           </p>
         </div>
 
@@ -691,7 +960,10 @@ update public.lab_settings
             <li>它會問你要把程式碼複製到哪個帳號、專案要叫什麼名字。
               <span class="plain-hint">名字可以照預設，等等會用到這個名字組網址。</span>
             </li>
-            <li><strong>接著會請你連接 Supabase（資料庫）</strong>——這就是下一步要做的事，先照畫面點下去。
+            <li>接著它會請你<strong>填三個環境變數</strong>
+              （<code>SUPABASE_URL</code>、<code>SUPABASE_PUBLISHABLE_KEY</code>、<code>SUPABASE_SECRET_KEY</code>）。
+              這就是上面那張表，一個一個貼進去。
+              <span class="plain-hint">表單上會有說明告訴你每個值去哪拿。</span>
             </li>
             <li>按下 Deploy，等 1～3 分鐘。完成後它會給你一個網址。</li>
           </ol>
@@ -705,22 +977,13 @@ update public.lab_settings
           </p>
           <p style="margin-top:10px">
             <strong>如果看到「No Supabase organizations found」：</strong>
-            這是說你的 Supabase 帳號還太新，裡面一個「組織（organization）」都還沒有。
-            按下面的字建立一個就好（大約 30 秒），然後再回來按一次部署：
-          </p>
-          <p style="margin-top:8px">
-            <a href="https://supabase.com/dashboard/new" target="_blank" rel="noopener noreferrer">
-              → 去 Supabase 建立組織（會開新分頁）
-            </a>
+            這代表 Vercel 想幫你裝 Supabase 整合，但你的帳號裡沒有組織可以裝。
+            <strong>正常情況下不該出現這一句</strong>——這個流程已經把資料庫另外處理掉了。
           </p>
           <p class="plain-hint" style="margin-top:8px">
-            組織只是「把專案放在一起的資料夾」，免費方案就夠用，不會收錢。
-            名稱隨便取（例如研究室的名字），建好之後回來按 F5 重新整理，再按一次一鍵部署。
-          </p>
-          <p class="plain-hint" style="margin-top:8px">
-            老實說：<strong>就算完全跳過資料庫那一步，網站也會架起來</strong>，
-            只是首頁會顯示「還沒連上資料庫」。你可以先按完成，之後從第 4 步
-            單獨把 Supabase 接上去（第 4 步有寫怎麼補）。
+            真的看到的話，代表 Vercel 那邊還留著舊的整合設定。
+            到 <a href="https://supabase.com/dashboard/new" target="_blank" rel="noopener noreferrer">Supabase 建立一個組織</a>
+            （30 秒，免費）再回來按一次就好；或者按 F5 重新整理再試一次。
           </p>
         </div>
 
@@ -766,232 +1029,37 @@ update public.lab_settings
 
         <div class="result" data-result="deploy" hidden></div>
 
-        <div class="actions">
-          <button type="button" class="btn btn-secondary" data-nav-prev>← 上一步</button>
-          <span class="spacer"></span>
-          <button type="button" class="btn btn-primary" data-nav-next>下一步：建立資料庫 →</button>
-        </div>
-      </section>
-
-      <!-- ==============================================================
-           第 4 步：建立資料庫（Supabase）
-           ============================================================== -->
-      <section class="panel" data-panel="database" id="panel-database">
-        <div class="panel-kicker">第 4 步</div>
-        <h2>建立資料庫（Supabase）</h2>
-
-        <div class="prereq-banner" data-prerequisite hidden></div>
-
-        <div class="prose">
+        <!-- 部署後的真正驗收：網站連得到資料庫嗎？
+             這一步驗的是「你的網站 → 你的資料庫」，跟上面「網址活著」
+             是兩件不同的事。環境變數填錯、或填了但沒生效，網站會活著
+             但首頁顯示「還沒連到資料庫」—— 這裡要抓的就是那個。 -->
+        <div class="callout callout--action" id="deployCheckPanel">
+          <h3>最後確認：網站連到資料庫了嗎</h3>
           <p>
-            資料庫就是放資料的地方。你剛剛按「一鍵部署」時，Vercel 應該已經問過你要不要
-            <strong>連接 Supabase</strong>（這是官方整合，畫面會寫 Supabase）。照下面做就好。
+            網站有回應，不代表它連得到資料庫。按一下這個，我直接問你的網站
+            「你知道資料庫在哪嗎？」
           </p>
-        </div>
-
-        <!-- 自動偵測：這一步最容易卡住的地方是「要去後台抄兩個值」。
-             但網站自己早就知道那兩個值（它就是靠它們連上資料庫的），
-             所以先讓它自己講，能省掉整段手抄流程。 -->
-        <div class="callout callout--action" id="dbAutoPanel">
-          <h3>先讓你的網站自己說</h3>
-          <p>
-            你的網站如果已經接上資料庫，它自己就知道「資料庫在哪」和「用哪把鑰匙」，
-            不用你去後台抄。
-          </p>
-          <div class="db-auto-row">
-            <button type="button" class="btn btn-primary" id="dbAutoDetectBtn">自動偵測我的資料庫</button>
-            <span class="db-auto-note" id="dbAutoNote">按一下，我會去問你的網站。</span>
-          </div>
-          <div class="db-auto-result" id="dbAutoResult" hidden></div>
-        </div>
-
-        <div class="callout callout--info">
-          <h3>如果你在部署時已經跳過 Supabase</h3>
-          <p>
-            沒關係，還是可以補：到 Vercel 的專案頁面 → 上方選單
-            <strong>Storage</strong>（或 Integrations）→ 找到 <strong>Supabase</strong> → 按 Connect。
-            之後的流程跟下面一樣。
-          </p>
-          <p class="plain-hint" style="margin-top:8px">
-            部署時按了「Skip」也很正常——尤其是第一次用 Supabase 的人。
-            補連結大約 2 分鐘，比卡在部署畫面快。
-          </p>
-        </div>
-
-        <ol class="action-list">
-          <li>
-            在 Vercel 的部署流程中，看到 Supabase 的畫面時，按
-            <strong>「Create a new Supabase project」</strong>（建立新的 Supabase 專案）。
-            <span class="plain-hint">
-              意思是「幫我開一個新的資料庫」，不是選現有的。
-            </span>
-          </li>
-          <li>
-            方案選 <strong>Free</strong>（免費）。
-            <span class="plain-hint">免費方案就夠研究室用了，之後要升級隨時可以。</span>
-          </li>
-          <li>
-            區域（Region）選 <strong>Singapore（新加坡）</strong>。
-            <span class="plain-hint">
-              離台灣最近，速度最快。選錯也可以用，但會慢一點。
-            </span>
-          </li>
-          <li>
-            按 Continue / Create，等它建立完成（大約 1～2 分鐘）。
-          </li>
-          <li>
-            <strong>金鑰會自動填好，不用手抄。</strong>
-            <span class="plain-hint">
-              這是官方整合的好處：Vercel 會把「資料庫在哪」和「用哪把鑰匙」自動設定成網站的環境變數。
-              你不用自己複製貼上，也不會抄錯。
-            </span>
-          </li>
-        </ol>
-
-        <div class="callout callout--warn">
-          <h3>重要：兩種金鑰不要搞混</h3>
-          <p>
-            Supabase 有兩種金鑰（key）：
-          </p>
-          <ul>
-            <li>
-              <strong><code>sb_publishable_…</code>（可以公開的）</strong>：
-              這把是給網頁用的，等等我會請你貼上來驗證。它本來就會出現在網頁程式裡，貼給我不會出事。
-            </li>
-            <li>
-              <strong><code>sb_secret_…</code> 或 <code>service_role</code>（絕對不能公開的）</strong>：
-              這把等於資料庫的萬能鑰匙。<strong>不要貼給任何人、不要貼進任何網頁</strong>，
-              包括這一個。這份引導從頭到尾都不會跟你要這把。
-            </li>
-          </ul>
-        </div>
-
-        <h3 class="section-title" id="dbManualTitle">沒有的話，自己建一個（照著做，約 3 分鐘）</h3>
-
-        <div class="field">
-          <label for="field-supabaseUrl">你的 Supabase 專案網址</label>
-          <div class="field-row">
-            <input
-              class="field-input"
-              id="field-supabaseUrl"
-              type="text"
-              data-field="supabaseUrl"
-              data-field-step="database"
-              placeholder="例如 https://abcdefghijkl.supabase.co"
-              autocomplete="off"
-              autocapitalize="none"
-              autocorrect="off"
-              spellcheck="false">
-          </div>
-          <span class="field-hint">
-            在 Supabase 後台左側 <strong>Settings</strong>（齒輪圖示）→ <strong>API</strong>，
-            找 <strong>Project URL</strong>。長得像 <code>https://xxxx.supabase.co</code>。
-            貼 <code>/rest/v1</code> 之類的尾巴也沒關係，我會自動去掉。
-          </span>
-        </div>
-
-        <div class="field">
-          <label for="field-publishableKey">你的 publishable key（可以公開的那把金鑰）</label>
-          <div class="field-row">
-            <input
-              class="field-input"
-              id="field-publishableKey"
-              type="text"
-              data-field="publishableKey"
-              data-field-step="database"
-              placeholder="sb_publishable_…"
-              autocomplete="off"
-              autocapitalize="none"
-              autocorrect="off"
-              spellcheck="false">
-          </div>
-          <span class="field-hint">
-            在 Supabase 後台 <strong>Settings</strong> → <strong>API Keys</strong>，
-            找 <code>sb_publishable_</code> 開頭的那一串。
-            <strong>不是</strong> <code>sb_secret_</code> 開頭的那把。
-            這把金鑰只會存在你自己的瀏覽器裡。
-          </span>
-          <span class="field-warning" id="keyWarning" hidden role="alert"></span>
-        </div>
-
-        <div class="verify-row">
-          <button type="button" class="btn btn-verify" data-verify="database">驗證連線</button>
-          <span class="plain-hint" style="margin:0">
-            我會去你的資料庫問一句「你還好嗎」，確認連得到。
-          </span>
-        </div>
-
-        <div class="result" data-result="database" hidden></div>
-
-        <!-- 這裡是原本缺掉的一環。
-             引導網頁在瀏覽器裡驗證「我連得到你的資料庫」——但那驗的是
-             「資料庫活著」，不是「你的網站連得到」。網站是靠 Vercel 上的
-             環境變數去連的，而那兩個變數只有使用者自己能填（引導網頁
-             沒有、也不該有改別人 Vercel 設定的權限）。
-             少了這一段，使用者會一路綠燈走到第 5 步，網站卻顯示
-             「還沒連到資料庫」——而且完全不知道為什麼。 -->
-        <div class="callout callout--action" id="dbPushPanel">
-          <h3>最後一哩：把這兩個值填進 Vercel</h3>
-          <p>
-            剛剛驗證的是「你的資料庫活著」。但<strong>你的網站</strong>要靠 Vercel 上的
-            兩個設定值才連得到它，而這兩個值只有你能填（我沒有權限改你的 Vercel 帳號）。
-          </p>
-
-          <div class="env-table" role="table" aria-label="要填進 Vercel 的兩個環境變數">
-            <div class="env-row" role="row">
-              <div class="env-name" role="cell"><code>SUPABASE_URL</code></div>
-              <div class="env-value" role="cell"><code id="dbEnvUrl">（先在上面填好資料庫網址）</code></div>
-              <div class="env-copy" role="cell">
-                <button type="button" class="btn btn-copy" id="dbEnvUrlCopy"
-                        data-copy="element" data-copy-target="#dbEnvUrl">複製</button>
-              </div>
-            </div>
-            <div class="env-row" role="row">
-              <div class="env-name" role="cell"><code>SUPABASE_PUBLISHABLE_KEY</code></div>
-              <div class="env-value" role="cell"><code id="dbEnvKey">（先在上面填好金鑰）</code></div>
-              <div class="env-copy" role="cell">
-                <button type="button" class="btn btn-copy" id="dbEnvKeyCopy"
-                        data-copy="element" data-copy-target="#dbEnvKey">複製</button>
-              </div>
-            </div>
-          </div>
-
-          <ol class="action-list" style="margin:14px 0 0">
-            <li>
-              打開 Vercel，進到你的專案 → 上方選單 <strong>Settings</strong>
-              → 左邊 <strong>Environment Variables</strong>。
-            </li>
-            <li>
-              把上面兩行各自貼成一個變數：<strong>Name</strong> 貼左邊那串，
-              <strong>Value</strong> 貼右邊那串。兩個都要加。
-              <span class="plain-hint">三個環境（Production / Preview / Development）都勾，或至少勾 Production。</span>
-            </li>
-            <li>
-              存好之後，到 <strong>Deployments</strong> → 最新那次部署右邊的
-              <strong>⋯</strong> → <strong>Redeploy</strong>。
-              <span class="plain-hint">
-                <strong>一定要重新部署。</strong>環境變數是「部署時」讀進去的，
-                只加變數不會讓已經跑起來的網站知道 —— 這是這一題最常見的原因。
-              </span>
-            </li>
-            <li>
-              重新部署完，按下面的按鈕確認。
-            </li>
-          </ol>
-
           <div class="verify-row">
-            <button type="button" class="btn btn-verify" id="dbVerifySiteBtn">檢查我的網站連上了沒</button>
-            <span class="plain-hint" style="margin:0">
-              我會去問你的網站：「你知道資料庫在哪嗎？」
-            </span>
+            <button type="button" class="btn btn-verify" id="dbVerifySiteBtn">檢查網站連上了沒</button>
+            <span class="plain-hint" style="margin:0">綠燈就可以往下一步走。</span>
           </div>
-
           <div class="result" id="dbVerifySiteResult" hidden></div>
 
-          <p class="plain-hint" style="margin-top:12px">
-            如果你在部署時是走<strong>官方整合</strong>（按了 Connect 而不是 Skip），
-            這兩個變數通常已經由 Vercel 自動填好了，按上面那個按鈕確認一下就好。
-          </p>
+          <!-- 沒過的補救：這就是上一輪漏掉的那一環，留著當保險 -->
+          <div id="deployEnvFix" hidden>
+            <p style="margin-top:14px"><strong>補救方式：到 Vercel 補上這三個變數</strong></p>
+            <ol class="action-list" style="margin:10px 0 0">
+              <li>Vercel 專案 → <strong>Settings</strong> → <strong>Environment Variables</strong></li>
+              <li>把三個變數各自加進去（名稱與值就是上面第 3 步那張表）</li>
+              <li>到 <strong>Deployments</strong> → 最新那次右邊 <strong>⋯</strong> → <strong>Redeploy</strong>。
+                <span class="plain-hint">
+                  <strong>一定要重新部署。</strong>環境變數是「部署時」才讀進去的，
+                  只加變數不會讓已經跑起來的網站知道。
+                </span>
+              </li>
+              <li>重新部署完，再按一次上面的按鈕確認。</li>
+            </ol>
+          </div>
         </div>
 
         <div class="actions">
@@ -1135,8 +1203,8 @@ update public.lab_settings
 
         <ol class="action-list">
           <li>
-            打開你剛剛貼上的網址（<a href="#" data-site-link>點這裡開啟我的網站</a>）。<span class="plain-hint">還沒填網址的話，先回第 3 步填好，這個連結才會生效。</span>
-            <span class="plain-hint">也可以直接複製第 3 步填的網址，貼到瀏覽器打開。</span>
+            打開你剛剛貼上的網址（<a href="#" data-site-link>點這裡開啟我的網站</a>）。<span class="plain-hint">還沒填網址的話，先回第 4 步填好，這個連結才會生效。</span>
+            <span class="plain-hint">也可以直接複製第 4 步填的網址，貼到瀏覽器打開。</span>
           </li>
           <li>
             應該會看到<strong>「第一次使用」</strong>的設定畫面。

@@ -111,7 +111,7 @@ export default async function handler(req, res) {
       checks: {
         environment: {
           ok: false,
-          message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。如果你是照引導網頁做的，請先完成第 4 步。'
+          message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。如果你是照引導網頁做的，請先完成第 3 步（建立資料庫），並在部署時把三個值填進 Vercel。'
         }
       }
     });

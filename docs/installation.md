@@ -42,7 +42,7 @@ Supabase（放資料的地方）      ← 你們的資料存在這裡，只有�
 維護者會給你一個網址，打開它就會看到引導畫面。
 
 > **維護者注意**：給出網址之前，先確認範本 repo 已經建立、是 public，
-> 而且 `wizard/config.js` 的 `repoUrl` 指向它。沒有的話，助理做到第 3 步
+> 而且 `wizard/config.js` 的 `repoUrl` 指向它。沒有的話，助理做到第 4 步
 > 「一鍵部署」時 Vercel 會找不到程式碼，錯誤訊息完全看不懂。
 > 詳見 [handover.md](handover.md) 的「交接清單」。
 
@@ -82,25 +82,53 @@ GitHub 是放程式碼的地方。你的研究室會有自己的一份副本。
 
 Supabase 是放資料的地方。你們的個案資料、成員名單都存在這裡。
 
+**這一步在部署之前**——先建好資料庫，下一步部署時才有三個值可以填。
+
+> **為什麼不是「部署時順便建」？** Vercel 的一鍵部署有個選項可以在部署時
+> 順便開一個 Supabase 專案，但全新的 Supabase 帳號會卡在那裡：Vercel 會說
+> 「找不到你的 Supabase 組織」，然後整個流程停住，連跳過都沒得按。
+> 先自己建好，多花兩分鐘，但不會卡住。
+
 ### 做什麼
 
-1. 點引導網頁第 4 步的連結（<https://supabase.com/dashboard/sign-up>）
+1. 點引導網頁第 3 步的連結（<https://supabase.com/dashboard/sign-up>）
 2. **用同一個 GitHub 帳號登入**（最快的方式）
+   - 第一次登入如果問你要不要建立「組織（organization）」，就建一個。
+     組織只是「把專案放在一起的資料夾」，免費方案就夠用。
 3. 按 **New project**
 4. 填寫：
    - **Name**：`lab-tracker`（或任何你認得的名字）
    - **Database Password**：按「Generate a password」讓它產生，**然後複製下來存好**
    - **Region**：選 **Southeast Asia (Singapore)** —— 離台灣最近，速度最快
 5. 按 **Create new project**，等 2 到 3 分鐘
+6. 建好之後，左側選單最下面 **Project Settings**（齒輪）→ **API Keys**，
+   這裡有三個值，下一步會用到
+
+### 三個值，兩個可以公開、一個不行
+
+| 你在後台看到 | 之後要填的變數 | 能不能公開 |
+|---|---|---|
+| **Project URL**（`https://xxxx.supabase.co`） | `SUPABASE_URL` | 可以 |
+| **Publishable key**（`sb_publishable_…`） | `SUPABASE_PUBLISHABLE_KEY` | 可以 |
+| **Secret key**（`sb_secret_…`） | `SUPABASE_SECRET_KEY` | **絕對不行** |
+
+> **舊稱呼**：如果顯示的是 `anon` 和 `service_role`，就是舊版名稱。
+> `anon` → `SUPABASE_PUBLISHABLE_KEY`，`service_role` → `SUPABASE_SECRET_KEY`。
+
+**Secret key 等於資料庫的萬能鑰匙**，可以繞過所有權限規則。它只能填進
+Vercel 的環境變數，絕對不要貼到任何公開的地方、不要傳到群組、不要寫進程式碼。
 
 ### 要注意
 
-**資料庫密碼要存起來。** 這把密碼平常不會用到（系統用的是另外的金鑰），
+**資料庫密碼要存起來。** 這把密碼平常不會用到（系統用的是上面那三把金鑰），
 但未來如果要直接操作資料庫會需要。存到你們研究室共用的密碼管理工具裡。
+
+**現在就把 Secret key 複製起來放著。** 下一步部署時要貼進表單，
+中間不要離開那一頁免得找不到（或者記住它在哪：Settings → API Keys）。
 
 ### 通過的標準
 
-引導網頁會檢查你是否已經建立專案。你也可以自己看：Supabase 後台左側看得到
+引導網頁會檢查資料庫連得到。你也可以自己看：Supabase 後台左側看得到
 你的專案名稱，狀態是綠色的 `Active`。
 
 ---
@@ -143,73 +171,56 @@ Supabase 是放資料的地方。你們的個案資料、成員名單都存在�
 - 跑完之後，資料表是空的、而且**沒登入的人讀不到任何一列**（RLS 權限規則）。
   這是正常的，驗證時看到空陣列不代表失敗。
 
-## 步驟 4：部署到 Vercel
+## 步驟 4：部署到 Vercel（順便把三個值填進去）
 
 Vercel 負責把網站跑起來，讓別人可以連進來。
+這一步同時把網站和資料庫接起來 —— 部署表單會直接問你那三個值。
 
 ### 做什麼
 
-1. 點引導網頁第 3 步的按鈕（**Deploy to Vercel**）
+1. 點引導網頁第 4 步的按鈕（**Deploy to Vercel**）
 2. 用**同一個 GitHub 帳號**登入 Vercel
 3. 第一次用會要求授權 Vercel 讀取你的 GitHub —— 按 **Authorize**
-4. 填寫專案名稱（例如 `cog-neuro-lab`），按 **Create**
-5. 等 1 到 2 分鐘部署完成
+4. 填寫專案名稱（例如 `cog-neuro-lab`）
+5. **填三個環境變數**——這是重點，清單會直接出現在表單上：
+
+   | 名稱 | 值 |
+   |---|---|
+   | `SUPABASE_URL` | 步驟 2 的 Project URL |
+   | `SUPABASE_PUBLISHABLE_KEY` | 步驟 2 的 Publishable key |
+   | `SUPABASE_SECRET_KEY` | 步驟 2 的 Secret key |
+
+   引導網頁第 4 步有一張表，前兩個有複製按鈕，直接按就好。
+
+6. 按 **Deploy**，等 1 到 2 分鐘
+
+### 為什麼要在部署時填
+
+環境變數是**部署時**才讀進去的。如果部署完才到 Settings 補，網站不會自己知道，
+一定要再按一次 Redeploy 才會生效 —— 很多人卡在這一步，因為「填了但沒用」。
+
+在部署前填就沒有這個問題：網站建起來的當下就是完整可用的。
 
 ### 要注意
 
 - 專案名稱會變成你的網址，用小寫英文與減號（例如 `cog-neuro-lab`）
 - 免費方案（Hobby）就夠用
-- 部署完會給你一個網址，長得像 `https://cog-neuro-lab.vercel.app`
+- **三個值一個都不能少**。少了 `SUPABASE_SECRET_KEY`，網站連得動資料庫，
+  但「第一次設定」那一步會壞掉，而且錯誤訊息一樣是「還沒連上資料庫」——
+  完全指錯方向，很難查
 
 ### 通過的標準
 
-引導網頁會確認你的網址活著。你也可以自己開那個網址看看 ——
-應該會看到「還不能開始使用」（因為還沒填金鑰，這是正常的）。
+引導網頁會確認兩件事：網址活著，而且**網站連得到資料庫**。
+你也可以自己開那個網址看看 —— 應該會看到 **「歡迎使用研究室追蹤系統」**
+的設定畫面（不是「還不能開始使用」）。
+
+如果看到「還不能開始使用」，按引導網頁第 4 步的「檢查網站連上了沒」，
+它會告訴你缺什麼、以及怎麼補。最常見的原因是某個變數填錯或漏填。
 
 ---
 
-## 步驟 5：填入金鑰
-
-這一步把 Vercel（網站）和 Supabase（資料庫）接起來。
-
-### 做什麼
-
-1. 回到 Supabase 後台，左側選單最下方點 **Project Settings**（齒輪圖示）
-2. 點 **API Keys**
-3. 你會看到兩把金鑰，各自複製：
-
-| 複製哪一把 | 貼到 Vercel 的哪個變數 |
-|---|---|
-| **Project URL**（`https://xxxx.supabase.co`） | `SUPABASE_URL` |
-| **Publishable key**（`sb_publishable_…`） | `SUPABASE_PUBLISHABLE_KEY` |
-| **Secret key**（`sb_secret_…`） | `SUPABASE_SECRET_KEY` |
-
-> **舊稱呼**：如果你的 Supabase 顯示的是 `anon` 和 `service_role`，
-> 那就是舊版名稱。`anon` → `SUPABASE_PUBLISHABLE_KEY`，
-> `service_role` → `SUPABASE_SECRET_KEY`。兩種都可以用。
-
-4. 到 Vercel 專案 → **Settings** → **Environment Variables**
-5. 把上面三個變數一個一個加進去（Name 填左邊、Value 貼右邊），
-   Environment 三個都勾（Production、Preview、Development）
-6. 加完之後到 **Deployments** 頁籤，最新的那一筆右邊點 **⋯** → **Redeploy**
-
-### 要注意
-
-**這三把金鑰的差別很重要：**
-
-- `SUPABASE_URL` 和 `SUPABASE_PUBLISHABLE_KEY` 會被送到使用者的瀏覽器 —— 這是正常的，
-  它們的權限很低，讀不到任何資料
-- `SUPABASE_SECRET_KEY` **可以繞過所有權限規則**。它只能放在 Vercel 的環境變數裡，
-  絕對不要貼到任何公開的地方、不要傳到群組、不要寫進程式碼
-
-### 通過的標準
-
-Redeploy 完成後，打開你的網址，應該從「還不能開始使用」變成
-**「歡迎使用研究室追蹤系統」** 的設定畫面。
-
----
-
-## 步驟 6：建立你的研究室
+## 步驟 5：建立你的研究室
 
 ### 做什麼
 
@@ -230,7 +241,7 @@ Redeploy 完成後，打開你的網址，應該從「還不能開始使用」�
 
 ---
 
-## 步驟 7：加入同事
+## 步驟 6：加入同事
 
 1. 登入後點右上角 **👥 人員名冊**
 2. 按 **新增成員**
@@ -265,8 +276,8 @@ Redeploy 完成後，打開你的網址，應該從「還不能開始使用」�
 
 分兩種情況，畫面上會寫：
 
-- **「還沒連上資料庫」** → 回到步驟 5，確認 Vercel 的三個環境變數都在，而且有按 Redeploy
-- **「資料表還沒建立」** → 回到步驟 3，把第二段語法也貼進 SQL Editor 執行
+- **「還沒連上資料庫」** → 回到步驟 4，確認 Vercel 的三個環境變數都在。如果部署之後才補的，一定要按 Redeploy 才會生效
+- **「資料表還沒建立」** → 回到步驟 3，把整份語法貼進 SQL Editor 按一次 RUN
 
 ### 過了一個寒假回來，網站打不開
 
