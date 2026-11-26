@@ -31,6 +31,7 @@ import {
   supabaseConfig, supabaseFetch, supabaseHeaders, probeSchemaVersion
 } from './_supabase.js';
 import { APP_VERSION } from '../src/lib/app-info.js';
+import { cronSecretConfigured } from './backup.js';
 
 const ADMIN_ROLES = new Set(['admin', 'backup_admin']);
 
@@ -116,6 +117,8 @@ export default async function handler(req, res) {
     const securityFixReady = anon ? await probeSchemaVersion(anon.url, anon) : true;
     return sendJson(res, 200, {
       securityFixReady,
+      // 沒設定時每日自動備份不會執行；系統設定頁據此提醒管理員。
+      cronSecretConfigured: cronSecretConfigured(),
       version: APP_VERSION,
       autoUpdate: policy.autoUpdate,
       // schemaReady:false 代表還沒跑第 3 段 SQL。介面要據此提示，

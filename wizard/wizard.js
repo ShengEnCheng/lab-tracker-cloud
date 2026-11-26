@@ -2123,9 +2123,9 @@ export async function checkSiteBackend(siteUrl) {
     if (payload.cronSecretConfigured === false) {
       return {
         tone: 'warn',
-        message: '網站已經連上資料庫，可以往下一步走。但還沒設定 <code>CRON_SECRET</code>：'
-          + '每日備份照樣會跑，只是任何人都能觸發它，把舊的備份擠掉。'
-          + '建議到 Vercel 專案 → Settings → Environment Variables 加上 <code>CRON_SECRET</code>'
+        message: '網站已經連上資料庫，可以往下一步走。但還沒設定 <code>CRON_SECRET</code>，'
+          + '<strong>每日自動備份不會執行</strong>。'
+          + '請到 Vercel 專案 → Settings → Environment Variables 加上 <code>CRON_SECRET</code>'
           + '（值用上面表格產生的那串），然後 Redeploy。'
       };
     }

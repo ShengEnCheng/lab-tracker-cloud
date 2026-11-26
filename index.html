@@ -4589,6 +4589,14 @@ td.sticky-col {
 
         // 第 4 段（權限的安全修正）沒補跑：系統一切正常，但少了它，被停用的成員或陌生人
         // 有機會清光備份、覆蓋資料。只有這裡看得到，所以要對管理員講清楚。
+        // 沒設定 CRON_SECRET：每日自動備份根本不會執行，管理員要知道。
+        if (payload.cronSecretConfigured === false && isAdmin()) {
+          setAutoUpdateNotice(
+            '⚠️ 每日自動備份沒有在執行：還沒設定 CRON_SECRET。請到 Vercel 專案 → Settings → Environment Variables '
+              + '加上 CRON_SECRET（任意一長串亂數），然後 Redeploy。',
+            'warn'
+          );
+        }
         if (payload.securityFixReady === false && isAdmin()) {
           setAutoUpdateNotice(
             '⚠️ 資料庫還缺一段安全性修正（第 4 段語法）。請打開引導網頁第 4 步「建立資料表」，按「複製整份語法」，'
