@@ -193,3 +193,27 @@ export function describeConfig() {
     ready: Boolean(anon?.url && anon?.key)
   };
 }
+
+// 建表語法的版本（第 4 段起才有 lab_schema_version()）。
+// /api/setup-status 與 /api/update-policy（系統設定頁）都用它提示「還沒補跑第 4 段」。
+// 第 4 段只修函式的權限檢查，不加表也不加欄位 —— 不問這個函式，永遠不知道它跑過沒。
+// 回傳：true = 已套用；false = 確定沒套用（函式不存在或版本太舊）；
+//       連線問題時當作已套用，不要因為一次網路抖動就叫人重跑 SQL。
+export const REQUIRED_SCHEMA_VERSION = 4;
+export async function probeSchemaVersion(url, keyConfig) {
+  try {
+    const response = await fetch(`${url}/rest/v1/rpc/lab_schema_version`, {
+      method: 'POST',
+      headers: buildHeaders(keyConfig),
+      body: '{}',
+      signal: AbortSignal.timeout(10000)
+    });
+    if (response.status === 404) return false;
+    if (!response.ok) return true;
+    const body = await response.json().catch(() => null);
+    // 只接受真正的數字（Number([]) 是 0，會把看不懂的回應誤判成版本太舊）。
+    return typeof body === 'number' ? body >= REQUIRED_SCHEMA_VERSION : true;
+  } catch {
+    return true;
+  }
+}

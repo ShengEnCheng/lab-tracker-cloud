@@ -33,14 +33,28 @@ export function generateTemporaryPassword(length = 12) {
   return out;
 }
 
-// 用呼叫者自己的 token 查他的角色。用使用者的 token（不是 secret），
-// 這樣讀到的就是他依權限真的看得到的東西。
+// 查出「發出這個請求的人」的角色。
+//
+// 一定要先用 token 向 Auth 問出使用者 id，再只查那一列。
+// 以前這裡直接查 lab_profiles 取第一列 —— 但 RLS 讓每個在職成員都讀得到
+// **所有人**的資料列，第一列通常是最早建立的管理員。於是任何一般成員都被
+// 當成管理員：能新增管理員，甚至拿管理員的 email「新增成員」，伺服器會重設
+// 那個人的密碼並把新密碼回給他 —— 等於接管管理員帳號。
+// （api/update-policy.js 的 callerRole 也是同一個寫法，兩邊要一致。）
 async function callerRole(token) {
-  const response = await supabaseFetch('/rest/v1/lab_profiles?select=role,active', {}, token);
-  if (!response.ok) return { role: '', active: false };
+  const authResponse = await supabaseFetch('/auth/v1/user', {}, token);
+  const user = await authResponse.json().catch(() => ({}));
+  if (!authResponse.ok || !user?.id) return { id: '', role: '', active: false };
+
+  const response = await supabaseFetch(
+    `/rest/v1/lab_profiles?select=role,active&id=eq.${encodeURIComponent(user.id)}&limit=1`,
+    {},
+    token
+  );
+  if (!response.ok) return { id: user.id, role: '', active: false };
   const rows = await response.json().catch(() => []);
   const row = Array.isArray(rows) ? rows[0] : null;
-  return { role: row?.role || '', active: Boolean(row?.active) };
+  return { id: user.id, role: row?.role || '', active: Boolean(row?.active) };
 }
 
 function forbidden(res) {
@@ -57,6 +71,10 @@ export default async function handler(req, res) {
 
   try {
     const me = await callerRole(token);
+    // 認不出身分 = token 無效或過期：回 401 讓前端去重新登入，而不是 403。
+    if (!me.id) {
+      return sendJson(res, 401, { error: 'invalid_token', message: '登入狀態已失效，請重新登入。' });
+    }
     if (!me.active) {
       return sendJson(res, 403, { error: 'forbidden', message: '你的帳號沒有權限或已被停用。' });
     }

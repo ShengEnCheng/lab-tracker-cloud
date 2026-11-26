@@ -28,7 +28,8 @@ const ROOT = path.resolve(__dirname, '..');
 const MIGRATIONS = [
   'supabase/migrations/001_lab_state.sql',
   'supabase/migrations/002_lab_settings.sql',
-  'supabase/migrations/003_update_policy.sql'
+  'supabase/migrations/003_update_policy.sql',
+  'supabase/migrations/004_security_fix.sql'
 ];
 
 let failed = 0;
@@ -137,6 +138,8 @@ const SHIMS = `
     raw_user_meta_data jsonb default '{}'::jsonb
   );
   create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+  -- 模擬「已登入、但不是任何成員」的呼叫者（例如自己去 Supabase 註冊的帳號）
+  create or replace function auth.role() returns text language sql stable as $$ select 'authenticated'::text $$;
 
   create schema if not exists extensions;
   create or replace function extensions.digest(data bytea, typ text) returns bytea
@@ -209,7 +212,7 @@ await check('關鍵函式都建立了', async () => {
   const EXPECTED = [
     'apply_lab_state_change', 'can_use_lab_data', 'create_lab_backup',
     'current_lab_role', 'import_lab_state', 'jsonb_sha256',
-    'prune_lab_backups', 'restore_lab_backup'
+    'prune_lab_backups', 'restore_lab_backup', 'is_lab_admin', 'lab_schema_version'
   ];
   const names = (await db.query(
     `select proname from pg_proc where pronamespace = 'public'::regnamespace`
@@ -217,6 +220,53 @@ await check('關鍵函式都建立了', async () => {
   const missing = EXPECTED.filter(name => !names.includes(name));
   if (missing.length) throw new Error(`缺少：${missing.join('、')}`);
   return `${names.length} 個函式`;
+});
+
+// 第 4 段修的漏洞：角色是 NULL 時，「current_lab_role() not in (...)」不成立，
+// 沒有角色的人（停用的成員、自己去 Supabase 註冊的帳號）會穿過權限檢查。
+// SHIMS 裡 auth.uid() 回 NULL、auth.role() 回 'authenticated'，正好就是那種人。
+async function expectNotAuthorized(sql) {
+  try {
+    await db.query(sql);
+  } catch (error) {
+    if (/not_authorized/.test(error.message)) return;
+    throw new Error(`擋下了，但原因不對：${error.message}`);
+  }
+  throw new Error(`沒有角色的人竟然能執行：${sql}`);
+}
+
+await check('沒有角色的人不能清光備份（prune_lab_backups）', async () => {
+  await expectNotAuthorized('select public.prune_lab_backups(0, 0)');
+  return '擋下了';
+});
+
+await check('沒有角色的人不能覆蓋全部資料（import_lab_state）', async () => {
+  await expectNotAuthorized(`select public.import_lab_state('{}'::jsonb, gen_random_uuid())`);
+  return '擋下了';
+});
+
+await check('沒有角色的人不能還原備份（restore_lab_backup）', async () => {
+  await expectNotAuthorized('select public.restore_lab_backup(gen_random_uuid(), gen_random_uuid())');
+  return '擋下了';
+});
+
+await check('未登入（anon）不能執行備份與資料寫入函式', async () => {
+  const rows = (await db.query(`
+    select p.proname,
+           has_function_privilege('anon', p.oid, 'execute') as anon_can
+    from pg_proc p
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('create_lab_backup', 'prune_lab_backups', 'import_lab_state', 'restore_lab_backup', 'apply_lab_state_change')
+  `)).rows;
+  const open = rows.filter(row => row.anon_can).map(row => row.proname);
+  if (open.length) throw new Error(`anon 還能執行：${open.join('、')}`);
+  return `${rows.length} 個函式都收回了`;
+});
+
+await check('lab_schema_version() 回報第 4 段已套用', async () => {
+  const version = (await db.query('select public.lab_schema_version() as v')).rows[0]?.v;
+  if (Number(version) < 4) throw new Error(`版本是 ${version}`);
+  return `版本 ${version}`;
 });
 
 await check('jsonb_sha256 能算出正確的雜湊', async () => {
@@ -274,7 +324,7 @@ await check('每一段重跑一次也不會報錯（貼兩次是安全的）', a
   if (result.rows[0].is_nullable !== 'NO') {
     throw new Error('重跑後欄位變成可以為空');
   }
-  return '三段都重跑過，沒有報錯';
+  return `${segments.length} 段都重跑過，沒有報錯`;
 });
 
 await check('預設值是「開啟」（既有研究室升級後行為不變）', async () => {

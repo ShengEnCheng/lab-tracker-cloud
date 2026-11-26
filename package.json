@@ -1,6 +1,6 @@
 {
   "name": "lab-tracker-cloud",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "description": "研究室多案追蹤系統（雲端範本，給任何研究室一鍵部署）",

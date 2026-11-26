@@ -2234,6 +2234,27 @@ async function probeColumnExists(supabaseUrl, key, table, column) {
   }
 }
 
+// 問資料庫「這個函式在不在、版本夠不夠新」。
+// 函式不存在時 PostgREST 回 404（PGRST202）。其他狀況一律回 exists:null =「不確定」。
+async function probeRpcVersion(supabaseUrl, key, name) {
+  try {
+    const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/rpc/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { apikey: key, accept: 'application/json', 'content-type': 'application/json' },
+      body: '{}'
+    });
+    if (response.status === 404) return { exists: false, version: null };
+    if (!response.ok) return { exists: null, version: null };
+    const body = await readResponseBody(response);
+    // 只接受真正的數字。Number([]) 是 0，會把「看不懂的回應」誤判成「版本太舊」。
+    const version = typeof body === 'number' ? body
+      : (typeof body === 'string' && /^\d+$/.test(body.trim()) ? Number(body) : null);
+    return { exists: true, version };
+  } catch {
+    return { exists: null, version: null };
+  }
+}
+
 // 從 PostgREST 的錯誤內容判斷「欄位不存在」還是「其他問題」。
 // 只有明確的 42703 / "column ... does not exist" 才算不存在。
 // 匯出給單元測試用：這段判斷錯了會讓「漏跑第 3 段」完全看不出來。
@@ -2323,6 +2344,22 @@ async function verifySchema(state) {
   }
 
   const missing = verdicts.filter(item => !item.verdict.schemaInstalled);
+
+  // 表都在了，再問「安全性修正那一段跑了沒」。它只改函式，表與欄位的探測問不出來。
+  const rpcProbe = WIZARD.schemaProbeRpc;
+  if (missing.length === 0 && rpcProbe && rpcProbe.name) {
+    const check = await probeRpcVersion(supabaseUrl, key, rpcProbe.name);
+    const tooOld = check.exists === true && check.version !== null && check.version < (rpcProbe.minVersion || 0);
+    if (check.exists === false || tooOld) {
+      return {
+        state: 'fail',
+        message: `資料表都在，但還缺${rpcProbe.label || '最後一段語法'}。`
+          + '系統看起來能用，但少了這段，被停用的成員或陌生人有機會清光備份、覆蓋資料。'
+          + '請按上面的「複製整份語法」，貼進 Supabase 的 SQL Editor 再按一次 Run（貼兩次不會壞）。'
+      };
+    }
+  }
+
   if (missing.length === 0) {
     return {
       state: 'pass',

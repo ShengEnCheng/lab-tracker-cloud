@@ -28,7 +28,7 @@
 
 import {
   applyCors, methodAllowed, readJsonBody, requireUserToken, sendJson,
-  supabaseConfig, supabaseFetch
+  supabaseConfig, supabaseFetch, supabaseHeaders, probeSchemaVersion
 } from './_supabase.js';
 import { APP_VERSION } from '../src/lib/app-info.js';
 
@@ -56,7 +56,7 @@ async function readPolicy() {
   try {
     const response = await fetch(
       `${config.url}/rest/v1/lab_settings?id=eq.1&select=auto_update_enabled`,
-      { headers: { apikey: secret.key }, signal: AbortSignal.timeout(10000) }
+      { headers: supabaseHeaders(secret), signal: AbortSignal.timeout(10000) }
     );
 
     if (!response.ok) {
@@ -111,7 +111,11 @@ export default async function handler(req, res) {
   // --- GET：公開讀（Actions 用這條） ------------------------------------
   if (req.method === 'GET') {
     const policy = await readPolicy();
+    // 第 4 段（權限的安全修正）跑了沒。系統設定頁據此提醒管理員補跑。
+    const anon = supabaseConfig(false);
+    const securityFixReady = anon ? await probeSchemaVersion(anon.url, anon) : true;
     return sendJson(res, 200, {
+      securityFixReady,
       version: APP_VERSION,
       autoUpdate: policy.autoUpdate,
       // schemaReady:false 代表還沒跑第 3 段 SQL。介面要據此提示，

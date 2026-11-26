@@ -11,7 +11,7 @@
 // 為什麼需要 setupComplete：
 //   第一次打開時要直接顯示設定精靈，而不是先顯示登入畫面讓人卡住。
 
-import { sendJson, supabaseConfig, applyCors } from './_supabase.js';
+import { sendJson, supabaseConfig, supabaseHeaders, applyCors } from './_supabase.js';
 import { APP_VERSION, APP_DISPLAY_NAME } from '../src/lib/app-info.js';
 
 export default async function handler(req, res) {
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     try {
       const response = await fetch(
         `${config.url}/rest/v1/lab_settings?id=eq.1&select=organization_name,setup_completed_at`,
-        { headers: { apikey: secret.key }, signal: AbortSignal.timeout(8000) }
+        { headers: supabaseHeaders(secret), signal: AbortSignal.timeout(8000) }
       );
       if (response.ok) {
         const rows = await response.json();

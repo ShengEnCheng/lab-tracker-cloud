@@ -10,13 +10,16 @@
 //   not_authorized。直接寫入（service_role 繞過 RLS）搭配明確的 updated_by，
 //   效果相同且意圖更清楚。
 
-import { sendJson, readJsonBody, supabaseConfig } from './_supabase.js';
+import { sendJson, readJsonBody, supabaseConfig, supabaseHeaders } from './_supabase.js';
 import { validateSetupInput } from '../src/lib/setup-validation.js';
 import { buildInitialState, SCHEMA_VERSION } from '../src/lib/initial-state.js';
 import { APP_VERSION } from '../src/lib/app-info.js';
 
+// 標頭一律用 supabaseHeaders()：舊制金鑰（eyJ… 的 anon / service_role）要同時放進
+// Authorization 才有對應的權限，只放 apikey 會被當成匿名請求 —— 讀到 [] 而不是報錯。
+// 詳見 _supabase.js 的 buildHeaders()。
 function secretHeaders(secret, extra = {}) {
-  return { apikey: secret.key, 'content-type': 'application/json', ...extra };
+  return supabaseHeaders(secret, '', extra);
 }
 
 async function sbFetch(config, secret, path, options = {}) {

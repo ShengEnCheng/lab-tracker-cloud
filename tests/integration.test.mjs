@@ -352,3 +352,136 @@ test('API 基本防護', async (t) => {
   await api.close();
   await mock.close();
 });
+
+// ---------------------------------------------------------------------------
+// 舊制 service_role 金鑰（eyJ… 的 JWT）要放進 Authorization 才有伺服器權限。
+// 曾經有四支 API 只放 apikey：用舊制金鑰的研究室「第一次設定」做不完、
+// setup-status 永遠說「還沒設定」。mock 現在照真實行為模擬這件事。
+test('情境：只有舊制 service_role 金鑰的研究室也能完整設定', async (t) => {
+  const legacySecret = ['eyJ', 'hbGciOiJIUzI1NiIs', 'InR5cCI6IkpXVCJ9', '.legacy-service-role'].join('');
+  const mock = await startMockSupabase({ secretKey: legacySecret });
+  mock.applyEnv(process.env);
+  delete process.env.SUPABASE_ANON_KEY;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const api = await startApiServer();
+
+  await t.test('第一次設定成功', async () => {
+    const { status, body } = await postJson(`${api.base}/api/setup`, VALID_SETUP);
+    assert.equal(status, 200, JSON.stringify(body));
+  });
+
+  await t.test('setup-status 看得到「已完成」與管理員（不是被當成匿名讀到 []）', async () => {
+    const { body } = await jsonFetch(`${api.base}/api/setup-status`);
+    assert.equal(body.setupComplete, true);
+    assert.equal(body.adminExists, true);
+  });
+
+  await t.test('/api/config 讀得到研究室名稱', async () => {
+    const { body } = await jsonFetch(`${api.base}/api/config`);
+    assert.equal(body.setupComplete, true);
+    assert.equal(body.organizationName, VALID_SETUP.organizationName);
+  });
+
+  await t.test('設定鎖仍然有效：不能再設定第二次', async () => {
+    const { status } = await postJson(`${api.base}/api/setup`, { ...VALID_SETUP, adminEmail: 'attacker@example.com' });
+    assert.equal(status, 409);
+  });
+
+  await api.close();
+  await mock.close();
+});
+
+// ---------------------------------------------------------------------------
+// /api/profiles 曾經取 lab_profiles 的「第一列」當呼叫者的角色。RLS 讓每個
+// 在職成員都讀得到所有人的資料列，第一列通常是管理員 —— 於是一般成員也被
+// 當成管理員，能新增管理員、甚至重設管理員的密碼並拿到新密碼。
+test('情境：一般成員不能透過 /api/profiles 提權', async (t) => {
+  const mock = await startMockSupabase();
+  mock.applyEnv(process.env);
+  const api = await startApiServer();
+
+  await postJson(`${api.base}/api/setup`, VALID_SETUP);
+  const admin = mock.state.authUsers[0];
+  const adminPasswordBefore = admin.password;
+
+  // 建一位一般成員，並讓他登入
+  const researcherId = '11111111-2222-4333-8444-555555555555';
+  mock.state.authUsers.push({ id: researcherId, email: 'ra@example.edu.tw', password: 'ra-password-1', email_confirm: true });
+  mock.state.tables.lab_profiles.push({ id: researcherId, email: 'ra@example.edu.tw', role: 'researcher', active: true });
+  const token = `token-${researcherId}`;
+  mock.state.authTokens.push(token);
+  const asResearcher = (method, payload) => jsonFetch(`${api.base}/api/profiles`, {
+    method,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: payload ? JSON.stringify(payload) : undefined
+  });
+
+  await t.test('一般成員可以看名冊', async () => {
+    const { status } = await asResearcher('GET');
+    assert.equal(status, 200);
+  });
+
+  await t.test('一般成員不能新增管理員', async () => {
+    const { status } = await asResearcher('POST', { email: 'evil@example.com', role: 'admin' });
+    assert.equal(status, 403);
+    assert.ok(!mock.state.authUsers.some(user => user.email === 'evil@example.com'));
+  });
+
+  await t.test('一般成員不能拿管理員的 email「新增成員」來重設他的密碼', async () => {
+    const { status, body } = await asResearcher('POST', { email: admin.email, role: 'researcher' });
+    assert.equal(status, 403);
+    assert.equal(body.generatedPassword, undefined);
+    assert.equal(admin.password, adminPasswordBefore);
+  });
+
+  await t.test('一般成員不能把自己改成管理員', async () => {
+    const { status } = await asResearcher('PATCH', { id: researcherId, email: 'ra@example.edu.tw', role: 'admin' });
+    assert.equal(status, 403);
+    assert.equal(mock.state.tables.lab_profiles.find(row => row.id === researcherId).role, 'researcher');
+  });
+
+  await t.test('假的 token 回 401（請重新登入），不是 403', async () => {
+    const { status } = await jsonFetch(`${api.base}/api/profiles`, { headers: { authorization: 'Bearer not-a-real-token' } });
+    assert.equal(status, 401);
+  });
+
+  await api.close();
+  await mock.close();
+});
+
+// ---------------------------------------------------------------------------
+// 第 4 段（004）是權限的安全修正，只改函式，沒加表也沒加欄位。
+// 已經在用的研究室不會自動套用，要靠這裡把「還沒補跑」講出來。
+test('情境：已部署的研究室還沒補跑第 4 段（安全性修正）', async (t) => {
+  const mock = await startMockSupabase();
+  mock.applyEnv(process.env);
+  const api = await startApiServer();
+  await postJson(`${api.base}/api/setup`, VALID_SETUP);
+
+  await t.test('補跑之前：setup-status 指出缺第四段', async () => {
+    mock.state.schemaVersion = null;
+    const { body } = await jsonFetch(`${api.base}/api/setup-status`);
+    assert.equal(body.securityFixReady, false);
+    assert.equal(body.checks.schema.ok, false);
+    assert.match(body.checks.schema.message, /第四段|004/);
+    // 系統仍然可以使用：設定完成的判斷不受影響
+    assert.equal(body.setupComplete, true);
+  });
+
+  await t.test('補跑之前：系統設定頁（update-policy）也知道', async () => {
+    const { body } = await jsonFetch(`${api.base}/api/update-policy`);
+    assert.equal(body.securityFixReady, false);
+  });
+
+  await t.test('補跑之後：一切正常', async () => {
+    mock.state.schemaVersion = 4;
+    const { body } = await jsonFetch(`${api.base}/api/setup-status`);
+    assert.equal(body.securityFixReady, true);
+    assert.equal(body.checks.schema.ok, true);
+    const policy = await jsonFetch(`${api.base}/api/update-policy`);
+    assert.equal(policy.body.securityFixReady, true);
+  });
+
+  await api.close();
+  await mock.close();
+});
