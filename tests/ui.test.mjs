@@ -76,12 +76,12 @@ function report() {
     const text = $('setupBlockedSteps')?.textContent || '';
     return /部署時.{0,6}讀|只加變數不會/.test(text);
   });
-  check('有指引使用者回引導網頁第 4 步（那裡有現成的複製按鈕）', () => {
+  check('有指引使用者回引導網頁第 5 步（那裡有現成的複製按鈕）', () => {
     const text = $('setupBlockedSteps')?.textContent || '';
     // 這個畫面上的人剛好卡在「不知道去哪拿那幾個值」。
     // 引導網頁第 4 步有一張表、有複製按鈕，所以一定要把他指回去，
     // 而不是只說「去 Vercel 填」—— 他不知道要填什麼。
-    return /第 4 步[^。]{0,40}(複製程式碼並部署|複製按鈕)/.test(text);
+    return /第 5 步[^。]{0,40}(部署網站|複製按鈕)/.test(text);
   });
   check('三個環境變數都有點名（少一個都會壞）', () => {
     const text = $('setupBlockedSteps')?.textContent || '';

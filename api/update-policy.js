@@ -169,7 +169,7 @@ export default async function handler(req, res) {
     if (payload?.code === '42703' || /auto_update_enabled/.test(text)) {
       return sendJson(res, 409, {
         error: 'schema_outdated',
-        message: '資料庫還缺「自動更新開關」這個欄位。請回到引導網頁第 5 步，把第 3 段語法貼進 Supabase 的 SQL Editor 執行。'
+        message: '資料庫還缺「自動更新開關」這個欄位。請回到引導網頁第 4 步「建立資料表」，把第 3 段語法貼進 Supabase 的 SQL Editor 執行。'
       });
     }
     return sendJson(res, response.status, { error: 'policy_update_failed', details: payload });

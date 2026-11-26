@@ -111,7 +111,7 @@ export default async function handler(req, res) {
       checks: {
         environment: {
           ok: false,
-          message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。如果你是照引導網頁做的，請先完成第 3 步（建立資料庫），並在部署時把三個值填進 Vercel。'
+          message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。如果你是照引導網頁做的，請先完成第 3 步「建立資料庫」，並在第 5 步「部署網站」把三個值填進 Vercel（填完要 Redeploy）。'
         }
       }
     });
@@ -171,8 +171,8 @@ export default async function handler(req, res) {
         schema: {
           ok: false,
           message: missing.includes('lab_settings') && probes.some(p => p.name === 'lab_state' && p.exists)
-            ? '主要資料表已經建好，但還缺第二段設定語法（002）。請回到引導網頁第 5 步，把第二段也貼進 SQL Editor 執行。'
-            : '資料表還沒建立。請回到引導網頁第 5 步，把語法貼進 Supabase 的 SQL Editor 執行。',
+            ? '主要資料表已經建好，但還缺第二段設定語法（002）。請回到引導網頁第 4 步「建立資料表」，把第二段也貼進 SQL Editor 執行。'
+            : '資料表還沒建立。請回到引導網頁第 4 步「建立資料表」，把語法貼進 Supabase 的 SQL Editor 執行。',
           missing
         }
       }
@@ -200,6 +200,10 @@ export default async function handler(req, res) {
       ? { name: settings.organization_name, code: settings.organization_code || '' }
       : null,
     adminExists: (adminCount || 0) > 0,
+    // 每日備份的保護密碼有沒有設定。刻意放在 checks 外面：
+    // 它是「建議補上」不是「不能用」，不應該讓「設定完成了沒」的判斷變成失敗。
+    // （沒設定時備份照跑，只是任何人都能觸發，見 api/backup.js 的說明。）
+    cronSecretConfigured: Boolean(String(process.env.CRON_SECRET || '').trim()),
     checks: {
       // 全部正常時也要有 environment 這一項：呼叫端（引導網頁）會固定讀
       // checks.environment.ok，缺了會變成 undefined 而被誤判成失敗。
@@ -209,7 +213,7 @@ export default async function handler(req, res) {
         ? { ok: true, message: '資料表都在。' }
         : {
             ok: false,
-            message: '資料表都在，但還缺第三段語法（003）。系統可以使用，只有「系統設定」裡的自動更新開關無法切換。請回到引導網頁第 5 步，把第三段貼進 SQL Editor 執行。',
+            message: '資料表都在，但還缺第三段語法（003）。系統可以使用，只有「系統設定」裡的自動更新開關無法切換。請回到引導網頁第 4 步「建立資料表」，把第三段貼進 SQL Editor 執行。',
             missing: ['lab_settings.auto_update_enabled']
           },
       setup: setupComplete

@@ -638,3 +638,48 @@ test('wizard：步驟判定', async (t) => {
     assert.equal(wizard.getStepPrerequisite('done', states).ok, true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 每日備份的觸發權限（api/backup.js）
+//
+// 這一段錯了不會當機，但會讓「任何人都能觸發備份」：備份只留最近 30 份，
+// 被人連敲 30 次，舊的好備份就全被擠掉。
+test('backup：誰可以觸發每日備份', async (t) => {
+  const { isCronAuthorized } = await import(`${ROOT}api/backup.js`);
+  const SECRET = 'a'.repeat(64);
+  const req = headers => ({ headers });
+
+  await t.test('有設 CRON_SECRET：帶對的密碼可以', () => {
+    assert.equal(isCronAuthorized(req({ authorization: `Bearer ${SECRET}` }), { CRON_SECRET: SECRET }), true);
+  });
+  await t.test('有設 CRON_SECRET：密碼錯就擋', () => {
+    assert.equal(isCronAuthorized(req({ authorization: 'Bearer wrong' }), { CRON_SECRET: SECRET }), false);
+  });
+  await t.test('有設 CRON_SECRET：只帶 x-vercel-cron 標頭要擋（那是誰都能偽造的）', () => {
+    assert.equal(isCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: SECRET }), false);
+  });
+  await t.test('有設 CRON_SECRET：什麼都沒帶要擋', () => {
+    assert.equal(isCronAuthorized(req({}), { CRON_SECRET: SECRET }), false);
+  });
+  await t.test('沒設 CRON_SECRET（舊部署）：退回舊判斷，備份不會因為自動更新而停掉', () => {
+    assert.equal(isCronAuthorized(req({ 'x-vercel-cron': '1' }), {}), true);
+    assert.equal(isCronAuthorized(req({}), {}), false);
+  });
+});
+
+test('wizard：產生 CRON_SECRET', async (t) => {
+  const wizardModule = await import(`${ROOT}wizard/wizard.js`);
+  await t.test('是 64 個十六進位字元', () => {
+    assert.match(wizardModule.generateCronSecret(), /^[0-9a-f]{64}$/);
+  });
+  await t.test('每次都不一樣', () => {
+    assert.notEqual(wizardModule.generateCronSecret(), wizardModule.generateCronSecret());
+  });
+  await t.test('一鍵部署網址會請使用者填 CRON_SECRET', () => {
+    const url = wizardModule.buildDeployUrl({
+      repoUrl: 'https://github.com/example/lab-tracker-cloud',
+      envKeys: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'CRON_SECRET']
+    });
+    assert.ok(new URL(url).searchParams.get('env').split(',').includes('CRON_SECRET'));
+  });
+});

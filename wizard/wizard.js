@@ -38,12 +38,17 @@ import { TEMPLATE, WIZARD } from './config.js';
 // 使用者先在 Supabase 建好專案、拿到三個金鑰，再按一鍵部署。
 // 部署時他手上有值可以直接填進表單（見 buildDeployUrl 的 env 參數），
 // 網站建起來的當下就是完整可用的 —— 也就完全不需要那個整合了。
+//
+// 「建立資料表」也排在部署之前：使用者建完 Supabase 專案時人就在 Supabase 後台，
+// 順手把 SQL 貼進 SQL Editor 最省事；否則要 Supabase → Vercel → 再回 Supabase。
+// 而且這樣部署完網站一打開就能直接進「第一次使用」，不會看到「資料表還沒建立」。
+// （docs/installation.md 也是這個順序。）
 export const STEPS = [
   { id: 'start', number: 1, navLabel: '開始之前', panelTitle: '開始之前：你會得到什麼' },
   { id: 'github', number: 2, navLabel: '建立 GitHub 帳號', panelTitle: '建立一個 GitHub 帳號' },
   { id: 'database', number: 3, navLabel: '建立資料庫', panelTitle: '建立資料庫（Supabase）' },
-  { id: 'deploy', number: 4, navLabel: '複製程式碼並部署', panelTitle: '把程式碼複製一份，變成你的網站' },
-  { id: 'schema', number: 5, navLabel: '建立資料表', panelTitle: '在資料庫裡建立資料表' },
+  { id: 'schema', number: 4, navLabel: '建立資料表', panelTitle: '在資料庫裡建立資料表' },
+  { id: 'deploy', number: 5, navLabel: '部署網站', panelTitle: '把程式碼複製一份，變成你的網站' },
   { id: 'admin', number: 6, navLabel: '建立管理員帳號', panelTitle: '建立你自己的管理員帳號' },
   { id: 'done', number: 7, navLabel: '完成了', panelTitle: '完成了！' }
 ];
@@ -56,8 +61,8 @@ const STEP_ALIASES = {
   '0': 'start', start: 'start', intro: 'start', begin: 'start',
   '1': 'github', github: 'github', githubaccount: 'github', account: 'github',
   '2': 'database', database: 'database', supabase: 'database', db: 'database',
-  '3': 'deploy', deploy: 'deploy', vercel: 'deploy', site: 'deploy',
-  '4': 'schema', schema: 'schema', tables: 'schema', sql: 'schema', migration: 'schema',
+  '3': 'schema', schema: 'schema', tables: 'schema', sql: 'schema', migration: 'schema',
+  '4': 'deploy', deploy: 'deploy', vercel: 'deploy', site: 'deploy',
   '5': 'admin', admin: 'admin', account_setup: 'admin', setup: 'admin', owner: 'admin',
   '6': 'done', done: 'done', finish: 'done', complete: 'done', end: 'done'
 };
@@ -334,7 +339,7 @@ export function evaluateStep(stepId, observations = {}) {
         return {
           state: 'fail',
           message: 'Supabase 專案網址看起來不對。它應該長得像 https://abcdefgh.supabase.co'
-            + '（在 Supabase 後台 Settings → API 找到）。'
+            + '（在 Supabase 後台左下 Project Settings → Data API 找得到，或按專案首頁上方的 Connect）。'
         };
       }
       if (obs.supabaseKeyInvalid === true) {
@@ -936,6 +941,28 @@ export function classifyFetchError(error) {
 }
 
 /**
+ * generateCronSecret
+ *
+ * 產生保護每日備份用的 CRON_SECRET（64 個十六進位字元 = 256 位元亂數）。
+ * 在使用者自己的瀏覽器裡產生，不會送到任何地方，也不存進 localStorage ——
+ * 它只需要貼進 Vercel 一次，之後由 Vercel 自己帶著。
+ *
+ * @param {(bytes: Uint8Array) => Uint8Array} [fillRandom] 測試時可注入；預設用 crypto.getRandomValues
+ * @returns {string}
+ */
+export function generateCronSecret(fillRandom) {
+  const bytes = new Uint8Array(32);
+  const fill = typeof fillRandom === 'function'
+    ? fillRandom
+    : (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.getRandomValues === 'function'
+      ? array => globalThis.crypto.getRandomValues(array)
+      : null);
+  if (!fill) throw new Error('這個瀏覽器不支援安全亂數，請換一個新版的瀏覽器。');
+  fill(bytes);
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * 判斷某個步驟是否「建議先完成上一步」。
  * 使用者可以自由跳步驟，但 UI 會在用前面步驟還沒通過時給一句提醒。
  *
@@ -974,7 +1001,7 @@ const STORAGE_KEY = 'lab-tracker-deployment-wizard:v1';
 // **secret key 刻意不在這份清單裡，而且引導網頁從頭到尾不會要它。**
 // 那把等於資料庫的萬能鑰匙，一旦進了 localStorage 就會留在磁碟上，
 // 也會被任何在同一個網域執行的程式讀到。正確做法是請使用者直接在
-// Vercel 的部署表單上填（第 4 步的三個欄位之一），不經過這個頁面。
+// Vercel 的部署表單上填（第 5 步的三個欄位之一），不經過這個頁面。
 const PERSISTED_FIELDS = ['githubUsername', 'siteUrl', 'supabaseUrl', 'publishableKey'];
 
 function createEmptyState() {
@@ -1050,6 +1077,7 @@ function collectElements(doc) {
     dbEnvKey: doc.getElementById('dbEnvKey'),
     deployEnvUrl: doc.getElementById('deployEnvUrl'),
     deployEnvKey: doc.getElementById('deployEnvKey'),
+    deployEnvCron: doc.getElementById('deployEnvCron'),
     dbVerifySiteBtn: doc.getElementById('dbVerifySiteBtn'),
     dbVerifySiteResult: doc.getElementById('dbVerifySiteResult'),
     deployEnvFix: doc.getElementById('deployEnvFix')
@@ -1210,6 +1238,16 @@ function showStep(elements, state, stepId, { scroll = true } = {}) {
       const check = button.querySelector('.step-check');
       if (check) check.textContent = passed ? '✔' : '';
     });
+
+    // 手機上步驟列是橫向捲動的：把「目前這一步」捲進畫面，
+    // 不然走到第 5 步時，步驟列還停在第 1～4 步，看不出自己在哪。
+    // 只動步驟列自己的捲軸（scrollLeft），不捲整頁。
+    const current = elements.nav.querySelector('.is-current');
+    const nav = elements.nav;
+    if (current && nav.scrollWidth > nav.clientWidth) {
+      const left = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+      nav.scrollLeft = Math.max(0, left);
+    }
   }
 
   // 進度
@@ -1330,10 +1368,10 @@ function updateNavChecks(elements, state) {
 function syncDynamicText(elements, state) {
   // 側邊欄與其他用「目前值」組字的地方（之後要加可以放這裡）
   const siteUrl = normalizeSiteUrl(state.siteUrl);
-  // 第 4 步「填進 Vercel」那張表：直接顯示使用者自己填的值，
+  // 第 5 步「填進 Vercel」那張表：直接顯示使用者自己填的值，
   // 讓他可以整段複製，不用回頭找、也不用重打字。
-  // 兩張表（第 3 步與第 4 步）顯示同樣的兩個值。
-  // 第 4 步那張是給「按下部署前」再看一眼用的，所以兩邊要同步。
+  // 兩張表（第 3 步與第 5 步）顯示同樣的兩個值。
+  // 第 5 步那張是給「按下部署前」再看一眼用的，所以兩邊要同步。
   const urlValue = normalizeSupabaseUrl(state.supabaseUrl);
   for (const node of [elements.dbEnvUrl, elements.deployEnvUrl]) {
     if (!node) continue;
@@ -1501,11 +1539,15 @@ function resolveCopyText(button) {
   return '';
 }
 
+// 顯示在 Vercel 部署表單上的說明（使用者填的時候看得到）。
+const CRON_ENV_DESCRIPTION = '前三個在 Supabase 專案的 Project Settings → API Keys（網址在專案首頁）；'
+  + 'CRON_SECRET 貼引導網頁幫你產生的那串亂數。';
+
 function resolveDeployUrl() {
   try {
     // 注意：這裡**刻意不帶 integrationId**。
     //
-    // 流程的順序是「先建 Supabase（第 3 步）→ 再部署（第 4 步）」，
+    // 流程的順序是「先建 Supabase（第 3 步）→ 建資料表（第 4 步）→ 再部署（第 5 步）」，
     // 所以使用者按部署時，手上已經有專案和三個金鑰了。
     // 不需要、也不想要整合再幫他建第二個資料庫。
     //
@@ -1517,7 +1559,7 @@ function resolveDeployUrl() {
       repoUrl: TEMPLATE.repoUrl,
       projectName: TEMPLATE.defaultProjectName,
       envKeys: TEMPLATE.requiredEnvVars,
-      envDescription: '這三個值在 Supabase 後台 Settings → API Keys 找得到。'
+      envDescription: CRON_ENV_DESCRIPTION
     });
   } catch {
     return '';
@@ -1852,7 +1894,7 @@ async function verifyDeploy(state) {
 export async function fetchDatabaseConfigFromSite(siteUrl) {
   const base = normalizeSiteUrl(siteUrl);
   if (!base) {
-    return { ok: false, reason: 'no-site', message: '還不知道你的網站網址，所以沒辦法自動抓。請先回第 3 步填好網址。' };
+    return { ok: false, reason: 'no-site', message: '還不知道你的網站網址，所以沒辦法自動抓。請先在第 5 步「部署網站」填好網址。' };
   }
 
   let response;
@@ -2023,7 +2065,7 @@ function bindSiteBackendCheck(elements, state) {
 export async function checkSiteBackend(siteUrl) {
   const base = normalizeSiteUrl(siteUrl);
   if (!base) {
-    return { tone: 'error', message: '還不知道你的網站網址。請先回第 3 步填好，這個檢查才有意義。' };
+    return { tone: 'error', message: '還不知道你的網站網址。請先在上面填好 Vercel 給你的網址，這個檢查才有意義。' };
   }
 
   let response;
@@ -2040,7 +2082,7 @@ export async function checkSiteBackend(siteUrl) {
   }
 
   if (response.status === 404) {
-    return { tone: 'error', message: '這個網址看起來不是這套系統（找不到 /api/setup-status）。請確認第 3 步貼的是正確的網址。' };
+    return { tone: 'error', message: '這個網址看起來不是這套系統（找不到 /api/setup-status）。請確認上面貼的是網站網址，不是 Vercel 後台的網址。' };
   }
   if (!response.ok) {
     return { tone: 'warn', message: `你的網站回了 HTTP ${response.status}，我不確定這是什麼狀況。請稍後再試一次。` };
@@ -2058,15 +2100,39 @@ export async function checkSiteBackend(siteUrl) {
     return {
       tone: 'ok',
       message: '你的網站已經連上資料庫，而且初始設定也完成了。'
-        + '這一步（以及後面的建表、建立帳號）你之前應該已經做過，可以直接跳到第 7 步。'
+        + '建立管理員帳號這一步你之前應該已經做過，可以直接跳到第 7 步。'
     };
   }
 
   if (payload && payload.backendConfigured) {
+    const checks = payload.checks || {};
+    if (checks.database && checks.database.ok === false) {
+      return {
+        tone: 'warn',
+        message: '你的網站有設定資料庫，但現在連不到它。最常見的原因是 Supabase 專案被暫停了：'
+          + '到 Supabase 後台按 <strong>Restore</strong> 叫醒它，再按一次這個按鈕。'
+      };
+    }
+    if (checks.schema && checks.schema.ok === false) {
+      return {
+        tone: 'warn',
+        message: '網站已經連上資料庫，但資料表還沒建好（或少了一段）。'
+          + '請回第 4 步「建立資料表」，把整份語法貼進 Supabase 的 SQL Editor 按一次 RUN。'
+      };
+    }
+    if (payload.cronSecretConfigured === false) {
+      return {
+        tone: 'warn',
+        message: '網站已經連上資料庫，可以往下一步走。但還沒設定 <code>CRON_SECRET</code>：'
+          + '每日備份照樣會跑，只是任何人都能觸發它，把舊的備份擠掉。'
+          + '建議到 Vercel 專案 → Settings → Environment Variables 加上 <code>CRON_SECRET</code>'
+          + '（值用上面表格產生的那串），然後 Redeploy。'
+      };
+    }
     return {
       tone: 'ok',
       message: '連上了！你的網站已經知道資料庫在哪。'
-        + '接著往下一步（建立資料表）繼續就好。'
+        + '接著往下一步（建立管理員帳號）繼續就好。'
     };
   }
 
@@ -2091,7 +2157,7 @@ async function verifyDatabase(state) {
     return {
       state: 'fail',
       message: 'Supabase 專案網址看起來不對。它應該長得像 https://abcdefgh.supabase.co'
-        + '（在 Supabase 後台 Settings → API 找到）。'
+        + '（在 Supabase 後台左下 Project Settings → Data API 找得到，或按專案首頁上方的 Connect）。'
     };
   }
   if (!key) {
@@ -2291,7 +2357,7 @@ async function verifyAdmin(state) {
   const siteUrl = normalizeSiteUrl(state.siteUrl);
 
   if (!siteUrl) {
-    return { state: 'fail', message: '還缺網站網址。請先回第 3 步貼上 Vercel 給你的網址。' };
+    return { state: 'fail', message: '還缺網站網址。請先回第 5 步「部署網站」貼上 Vercel 給你的網址。' };
   }
 
   let response;
@@ -2370,9 +2436,9 @@ async function verifyAdmin(state) {
   const alreadyMentionsForm = details.some(text => /第一次使用|表單|建立管理員/.test(text));
 
   if (pendingIds.has('schema')) {
-    parts.push('這要回到第 5 步「建立資料表」，把建表語法（記得每一段都要）貼進 Supabase 的 SQL Editor 執行。');
+    parts.push('這要回到第 4 步「建立資料表」，把建表語法（記得每一段都要）貼進 Supabase 的 SQL Editor 執行。');
   } else if (pendingIds.has('environment')) {
-    parts.push('請回到第 4 步「建立資料庫」，確認 Vercel 上有把 Supabase 的金鑰填好（照 Vercel 的畫面點就會自動填）。');
+    parts.push('請回到第 5 步「部署網站」，照最下面的「補救方式」到 Vercel 補上三個環境變數，然後一定要 Redeploy（重新部署）。');
   } else if (pendingIds.has('database')) {
     // 伺服器自己的說明通常已經講了「按 Restore 喚醒」，那就不要再重複一次。
     if (!details.some(text => /Restore|暫停/i.test(text))) {
@@ -2511,6 +2577,18 @@ function renderMigrationSql(elements) {
 // -----------------------------------------------------------------------------
 
 function renderDeploySection(elements) {
+  // 每次打開頁面都產生一組新的：值是什麼不重要，只要貼進 Vercel 的那一組就是密碼。
+  // 刻意不存：重新整理後換一組也沒關係，反正還沒貼進去之前它什麼都不是。
+  if (elements.deployEnvCron) {
+    try {
+      const secret = generateCronSecret();
+      elements.deployEnvCron.dataset.raw = secret;
+      elements.deployEnvCron.textContent = `${secret.slice(0, 12)}…${secret.slice(-6)}`;
+    } catch (error) {
+      elements.deployEnvCron.textContent = error.message;
+    }
+  }
+
   const url = resolveDeployUrl();
   if (elements.deployLink) {
     if (url) {
@@ -2530,8 +2608,8 @@ function renderDeploySection(elements) {
       ['repository-url', TEMPLATE.repoUrl, '要複製的程式碼來源。你的 GitHub 會多一份自己的副本。'],
       ['project-name', TEMPLATE.defaultProjectName, 'Vercel 上這個專案的名字，也是網址的一部分。'],
       ['repository-name', TEMPLATE.defaultProjectName, '複製到你 GitHub 後，那個 repo 要叫什麼名字。'],
-      ['env', TEMPLATE.requiredEnvVars.join(','), '部署時要填的三個環境變數。填好之後，網站建起來當下就是完整可用的。'],
-      ['envDescription', '這三個值在你的 Supabase 專案後台 Settings → API Keys 找得到。', '在部署表單上說明那三個值去哪裡拿。'],
+      ['env', TEMPLATE.requiredEnvVars.join(','), '部署時要填的四個環境變數。填好之後，網站建起來當下就是完整可用的。'],
+      ['envDescription', CRON_ENV_DESCRIPTION, '在部署表單上說明那四個值去哪裡拿。'],
       ['external-id', TEMPLATE.repoUrl, '只是讓 Vercel 後台知道「這個部署從哪來的」，不影響功能。']
     ];
     paramList.innerHTML = rows.map(([name, value, explain]) => (

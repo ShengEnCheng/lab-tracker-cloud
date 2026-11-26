@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { STEPS as WIZARD_STEPS } from '../wizard/wizard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -465,18 +466,9 @@ check('repoUrl 指向的 repo 匿名讀得到（一鍵部署才不會失敗）',
 // 文件（docs/installation.md）也要掃：助理一手拿文件、一手點引導網頁，
 // 文件寫錯同樣會把他帶到錯的步驟，而且他更難自己發現。
 check('使用者可見的「引導網頁第 N 步」沒有差一號', () => {
-  // 引導網頁的步驟編號（順序＝畫面上的 1、2、3…）
-  // 注意：這裡必須跟 wizard/wizard.js 的 STEPS 順序一致。
-  // 資料庫排在部署之前 —— 先建好資料庫，部署時才有三個值可以填。
-  const steps = [
-    { id: 'start', label: '開始之前' },
-    { id: 'github', label: '建立 GitHub 帳號' },
-    { id: 'database', label: '建立資料庫' },
-    { id: 'deploy', label: '複製程式碼並部署' },
-    { id: 'schema', label: '建立資料表' },
-    { id: 'admin', label: '建立管理員帳號' },
-    { id: 'done', label: '完成了' }
-  ];
+  // 引導網頁的步驟編號（順序＝畫面上的 1、2、3…），直接讀 wizard/wizard.js 的 STEPS。
+  // 以前這裡手抄一份，引導網頁調整順序時這份就過期，檢查反而會擋下「改對的」訊息。
+  const steps = WIZARD_STEPS.map(step => ({ id: step.id, label: step.navLabel }));
 
   // 這些關鍵字出現在「第 N 步」附近時，用來判斷那句話指的是哪一個步驟。
   // 用語意而不是數字，才能抓出「數字寫錯」。

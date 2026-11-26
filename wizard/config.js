@@ -34,7 +34,11 @@ export const TEMPLATE = {
   //
   // 這三個值都只有使用者自己拿得到，所以引導網頁的工作是「陪他去 Supabase
   // 後台把值抄回來、幫他貼進部署表單」，而不是假裝能幫他查。
-  requiredEnvVars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY'],
+  //
+  // 第四個 CRON_SECRET：保護每日備份的密碼（見 api/backup.js）。
+  // 它不用去哪裡抄 —— 引導網頁在使用者的瀏覽器裡產生一組亂數，按「複製」貼上就好。
+  // Vercel 看到這個變數，排程呼叫 /api/backup 時就會自動帶上它。
+  requiredEnvVars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'CRON_SECRET'],
   // 部署後的預設專案名稱
   defaultProjectName: 'lab-tracker',
   appDisplayName: '研究室追蹤系統'

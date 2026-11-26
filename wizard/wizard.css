@@ -815,8 +815,25 @@ strong { font-weight: 700; }
 @media (max-width: 640px) {
   .env-row { flex-direction: column; align-items: stretch; gap: 8px; }
   .env-name { min-width: 0; }
+  /* 直向排列時 flex-basis 會變成「高度」，180px 會撐出一大塊空白。 */
+  .env-value { flex: 0 0 auto; }
   .env-copy .btn { width: 100%; }
 }
+
+/* secret key 那一列放的是說明文字，不是值，用一般字型比較好讀。 */
+.env-value .secret-note {
+  font-size: .9rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+/* 子步驟裡的小清單用圓點，免得跟外面的 ①②③ 編號撞在一起。 */
+.substep-list {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.substep-list > li { margin: 0 0 10px; line-height: 1.7; }
+.substep-list > li:last-child { margin-bottom: 0; }
 
 /* 第 4 步的自動偵測面板：把「去後台抄兩個值」變成「按一個按鈕」。
    用 action 色系（不是 info），因為它是一個要按的動作，不是純說明。 */
@@ -1246,6 +1263,102 @@ details[open] .sql-toggle::before { content: "收起 ▴"; }
   .panel { padding: 26px 24px; }
 }
 
+
+/* --------------------------------------------------------------------------
+   16b. 子步驟（①②③）與真實畫面截圖
+   -------------------------------------------------------------------------- */
+
+/* 一個大步驟裡有好幾個動作時，用編號小段落排，讓人一眼看出「做到哪」。 */
+.substeps {
+  list-style: none;
+  margin: 22px 0 18px;
+  padding: 0;
+  counter-reset: none;
+}
+
+.substep {
+  position: relative;
+  margin: 0 0 18px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.substep-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 1.08rem;
+}
+
+.substep-num {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: .95rem;
+  font-weight: 700;
+}
+
+.substep .btn-hero { margin: 4px 0 16px; }
+
+/* 真實畫面截圖：外框做成「瀏覽器視窗」的樣子，讓人知道這是別的網站的畫面。 */
+.shot {
+  margin: 16px 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.shot-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: #eef2f7;
+  border-bottom: 1px solid var(--line);
+  font-size: .8rem;
+  color: var(--ink-faint);
+}
+
+.shot-bar::before {
+  content: "";
+  width: 34px;
+  height: 8px;
+  flex: 0 0 auto;
+  background:
+    radial-gradient(circle at 4px 4px, #e5655b 3.5px, transparent 4px),
+    radial-gradient(circle at 17px 4px, #e9b13c 3.5px, transparent 4px),
+    radial-gradient(circle at 30px 4px, #5bb663 3.5px, transparent 4px);
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.shot figcaption {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-size: .9rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.shot figcaption strong { color: var(--ink); }
+
+/* 點圖放大：用 <a> 包圖，開新分頁看原尺寸。 */
+.shot a { display: block; cursor: zoom-in; }
+
 /* --------------------------------------------------------------------------
    17. 手機（<= 760px）：改成上下排列
    -------------------------------------------------------------------------- */
@@ -1270,6 +1383,7 @@ details[open] .sql-toggle::before { content: "收起 ▴"; }
 
   /* 手機上步驟列表改成橫向可滑動，省高度 */
   .step-nav {
+    position: relative;  /* 讓 offsetLeft 以步驟列為基準，wizard.js 才捲得準 */
     flex-direction: row;
     overflow-x: auto;
     gap: 7px;
@@ -1289,6 +1403,14 @@ details[open] .sql-toggle::before { content: "收起 ▴"; }
   }
 
   .step-label { flex: 0 0 auto; }
+
+  /* 七個步驟在手機上擠不下一排：只有「目前這一步」顯示文字，其他只留編號，
+     這樣一眼看得到總共幾步、現在在第幾步、哪些打勾了。 */
+  .step-button:not(.is-current) .step-label { display: none; }
+  .step-button:not(.is-current) { padding: 8px 11px; }
+  .step-button:not(.is-current) .step-check:empty { display: none; }
+
+  .substep { padding: 16px 14px 18px; }
 
   .panel {
     padding: 22px 18px;

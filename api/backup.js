@@ -1,10 +1,32 @@
+import { timingSafeEqual } from 'node:crypto';
 import { methodAllowed, sendJson, supabaseServerFetch } from './_supabase.js';
 
-function authorized(req) {
-  const cron = req.headers['x-vercel-cron'] === '1';
-  const secret = process.env.CRON_SECRET;
-  const supplied = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  return cron || (secret && supplied === secret);
+// 誰可以觸發備份。
+//
+// 有設定 CRON_SECRET（部署時引導網頁會請使用者產生一組）：
+//   只認密碼。Vercel 的排程會自動帶上 `Authorization: Bearer <CRON_SECRET>`。
+//   `x-vercel-cron` 標頭一律不認 —— 那是請求的人自己填的，任何人都能偽造。
+//
+// 為什麼這很重要：每次備份完都會清理，只留最近 30 份每日備份。有人連敲 30 次，
+// 舊的好備份就全部被擠掉、換成 30 份「現況」—— 資料被改壞時就沒有舊版可以還原。
+//
+// 沒有設定 CRON_SECRET（這個版本之前部署的研究室）：
+//   退回舊的判斷，讓他們的每日備份不會因為自動更新而突然停掉。
+//   /api/setup-status 會回報「還沒設定 CRON_SECRET」，提醒他們補上。
+export function isCronAuthorized(req, env = process.env) {
+  const secret = String(env.CRON_SECRET || '').trim();
+  if (secret) {
+    const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+    return timingSafeEqualText(supplied, secret);
+  }
+  return req.headers['x-vercel-cron'] === '1';
+}
+
+function timingSafeEqualText(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
 }
 
 function taipeiKind() {
@@ -22,7 +44,7 @@ async function writeRun(runId, patch) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return methodAllowed(res, ['GET', 'POST']);
-  if (!authorized(req)) return sendJson(res, 401, { error: 'unauthorized' });
+  if (!isCronAuthorized(req)) return sendJson(res, 401, { error: 'unauthorized' });
 
   const kind = taipeiKind();
   let runId;
