@@ -3662,20 +3662,20 @@ td.sticky-col {
       if (membersDatalist) {
         membersDatalist.innerHTML = Array.from(students).map(s => {
           const mem = (appData.members || []).find(m => m.id === s);
-          return `<option value="${s}">${mem && mem.name && mem.name !== s ? `${s} (${mem.name})` : s}</option>`;
+          return `<option value="${escapeHtml(s)}">${escapeHtml(mem && mem.name && mem.name !== s ? `${s} (${mem.name})` : s)}</option>`;
         }).join('');
       }
 
       studentSelect.innerHTML = '<option value="ALL">全部學生</option>' +
-        Array.from(students).map(s => `<option value="${s}">${s}</option>`).join('');
+        Array.from(students).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
       if (Array.from(students).includes(curStudent)) studentSelect.value = curStudent;
 
       const studies = ['OPT_Bone', 'music40', ...(appData.customStudies || []).map(c => c.code)];
       studySelect.innerHTML = '<option value="ALL">全部研究案</option>' +
-        studies.map(s => `<option value="${s}">${s}</option>`).join('');
+        studies.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
       if (studies.includes(curStudy)) studySelect.value = curStudy;
 
-      newSubStudy.innerHTML = studies.map(s => `<option value="${s}">${s}</option>`).join('');
+      newSubStudy.innerHTML = studies.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
     }
 
     // Render Student Pill
@@ -3773,6 +3773,18 @@ td.sticky-col {
         .replace(/'/g, '&#39;');
     }
 
+    // 把值放進 onclick="f(…)" 這種「HTML 屬性裡的 JavaScript」時用這個，不是 escapeHtml。
+    //
+    // 為什麼 escapeHtml 不夠：瀏覽器會先把 &#39; 還原成 ' 才執行 JavaScript，
+    // 所以 onclick="f('＄{escapeHtml(x)}')" 這種寫法裡的 x 只要含有 ' 就能跳出字串、執行任意程式。
+    // 研究代碼、成員代號、里程碑代號都是使用者自己填的，這是真的攻擊面。
+    //
+    // 做法：先用 JSON.stringify 變成合法的 JS 字串字面值（含引號），再做 HTML 跳脫。
+    // 用法：onclick="f(${jsArg(x)})" —— 注意外面「不要」再包引號。
+    function jsArg(value) {
+      return escapeHtml(JSON.stringify(value === null || value === undefined ? '' : String(value)));
+    }
+
     function getStudentColor(owner) {
       const map = {
         'DEMO-A': { bg: 'linear-gradient(140deg, #2e90fa, #175cd3)', text: '#ffffff' },
@@ -3820,7 +3832,7 @@ td.sticky-col {
         const roleText = memObj && memObj.role ? memObj.role : '實驗室成員';
 
         return `
-          <div class="student-card ${isActive ? 'active' : ''}" role="button" tabindex="0" onclick="toggleStudentCardFilter('${escapeHtml(stu)}')">
+          <div class="student-card ${isActive ? 'active' : ''}" role="button" tabindex="0" onclick="toggleStudentCardFilter(${jsArg(stu)})">
             <div class="student-card-head">
               <div class="student-card-profile">
                 <div class="student-avatar" style="background:${color.bg}; color:${color.text};">
@@ -3891,14 +3903,14 @@ td.sticky-col {
           <tr>
             <td><span class="badge ${t.status.badgeClass}"><span class="badge-dot"></span>${t.status.label}</span></td>
             <td>${renderStudentPill(t.owner)}</td>
-            <td><strong>${t.date}</strong> <span class="muted">(${dText})</span></td>
-            <td><strong>${t.study}</strong></td>
-            <td><strong>${t.subjectId}</strong> ${t.subjectName ? `<span class="muted">(${t.subjectName})</span>` : ''}</td>
-            <td><strong>${t.milestoneLabel}</strong></td>
-            <td class="muted">${t.ruleDesc}</td>
+            <td><strong>${escapeHtml(t.date)}</strong> <span class="muted">(${dText})</span></td>
+            <td><strong>${escapeHtml(t.study)}</strong></td>
+            <td><strong>${escapeHtml(t.subjectId)}</strong> ${t.subjectName ? `<span class="muted">(${escapeHtml(t.subjectName)})</span>` : ''}</td>
+            <td><strong>${escapeHtml(t.milestoneLabel)}</strong></td>
+            <td class="muted">${escapeHtml(t.ruleDesc)}</td>
             <td>
               <button type="button" class="toggle-done-btn ${t.done ? 'is-done' : (t.status.code === 'OVERDUE' ? 'is-overdue' : '')}"
-                onclick="toggleTaskDone('${t.studyType}', ${t.studyIndex || 0}, ${t.rowIndex}, '${t.doneField || t.milestoneKey}')">
+                onclick="toggleTaskDone(${jsArg(t.studyType)}, ${t.studyIndex || 0}, ${t.rowIndex}, ${jsArg(t.doneField || t.milestoneKey)})">
                 ${t.done ? '✅ 已完成 (點擊改未完成)' : '⬜ 標記為已完成'}
               </button>
             </td>
@@ -3972,10 +3984,10 @@ td.sticky-col {
               else if (t.status.code === 'GREEN') evClass = 'ev-green';
 
               return `
-                <div class="cal-event ${evClass}" role="button" tabindex="0" title="點擊切換完成狀態：${t.study} ${t.subjectId} ${t.milestoneLabel} (${t.owner})"
-                  onclick="toggleTaskDone('${t.studyType}', ${t.studyIndex || 0}, ${t.rowIndex}, '${t.doneField || t.milestoneKey}')">
-                  <div><strong>[${t.owner}] ${t.study}・${t.subjectId}</strong> ${t.done ? '✓' : ''}</div>
-                  <div>${t.milestoneLabel}</div>
+                <div class="cal-event ${evClass}" role="button" tabindex="0" title="點擊切換完成狀態：${escapeHtml(`${t.study} ${t.subjectId} ${t.milestoneLabel} (${t.owner})`)}"
+                  onclick="toggleTaskDone(${jsArg(t.studyType)}, ${t.studyIndex || 0}, ${t.rowIndex}, ${jsArg(t.doneField || t.milestoneKey)})">
+                  <div><strong>[${escapeHtml(t.owner)}] ${escapeHtml(t.study)}・${escapeHtml(t.subjectId)}</strong> ${t.done ? '✓' : ''}</div>
+                  <div>${escapeHtml(t.milestoneLabel)}</div>
                 </div>
               `;
             }).join('')}
@@ -3996,12 +4008,12 @@ td.sticky-col {
       return `
         <div class="ms-cell ${st.cellClass}">
           <div class="ms-row-top">
-            <input type="date" class="ms-date-input" value="${dateVal || ''}"
-              onchange="updateTableField('${studyType}', ${rowIndex}, '${dateField}', this.value)">
+            <input type="date" class="ms-date-input" value="${escapeHtml(dateVal || '')}"
+              onchange="updateTableField(${jsArg(studyType)}, ${rowIndex}, ${jsArg(dateField)}, this.value)">
             ${ownerField ? `
-              <input type="text" class="ms-owner-input" list="labMembersDatalist" value="${ownerVal || ''}" placeholder="負責人"
+              <input type="text" class="ms-owner-input" list="labMembersDatalist" value="${escapeHtml(ownerVal || '')}" placeholder="負責人"
                 title="負責學生"
-                onchange="updateTableField('${studyType}', ${rowIndex}, '${ownerField}', this.value)">
+                onchange="updateTableField(${jsArg(studyType)}, ${rowIndex}, ${jsArg(ownerField)}, this.value)">
             ` : ''}
           </div>
           <div class="ms-row-bottom">
@@ -4010,7 +4022,7 @@ td.sticky-col {
               ${extraBtnHtml}
               ${dateVal ? `
                 <button type="button" class="toggle-done-btn ${doneVal ? 'is-done' : (st.code === 'OVERDUE' ? 'is-overdue' : '')}"
-                  onclick="updateTableField('${studyType}', ${rowIndex}, '${doneField}', ${!doneVal})">
+                  onclick="updateTableField(${jsArg(studyType)}, ${rowIndex}, ${jsArg(doneField)}, ${!doneVal})">
                   ${doneVal ? '✓完成' : (st.code === 'OVERDUE' ? '逾期!' : '待辦')}
                 </button>
               ` : ''}
@@ -4039,11 +4051,11 @@ td.sticky-col {
             <td class="sticky-col">
               <span class="subject-id">${escapeHtml(r.id)}</span>
               ${studentFilter !== 'ALL' || statusFilter !== 'ALL' || keyword ? `<div class="match-hint">符合節點 ${matchedCount} 筆</div>` : ''}
-              <input type="text" class="subject-name-input" value="${r.name || ''}" placeholder="姓名縮寫"
+              <input type="text" class="subject-name-input" value="${escapeHtml(r.name || '')}" placeholder="姓名縮寫"
                 onchange="updateTableField('optBone', ${i}, 'name', this.value)">
             </td>
             <td>
-              <input type="date" class="ms-date-input" value="${r.screenDate || ''}"
+              <input type="date" class="ms-date-input" value="${escapeHtml(r.screenDate || '')}"
                 onchange="updateTableField('optBone', ${i}, 'screenDate', this.value)">
             </td>
             <td>
@@ -4055,7 +4067,7 @@ td.sticky-col {
               })}
             </td>
             <td>
-              <input type="date" class="ms-date-input" value="${r.p1Start || ''}"
+              <input type="date" class="ms-date-input" value="${escapeHtml(r.p1Start || '')}"
                 title="輸入開始日期將自動推算 +28 天結束日期"
                 onchange="updateOptStartAndAutoEnd(${i}, 'p1Start', 'p1End', this.value)">
               <div class="cell-hint">輸入自動 +28 天</div>
@@ -4078,7 +4090,7 @@ td.sticky-col {
               })}
             </td>
             <td>
-              <input type="date" class="ms-date-input" value="${r.washStart || ''}"
+              <input type="date" class="ms-date-input" value="${escapeHtml(r.washStart || '')}"
                 title="輸入開始日期將自動推算 +28 天結束日期"
                 onchange="updateOptStartAndAutoEnd(${i}, 'washStart', 'washEnd', this.value)">
               <div class="cell-hint">輸入自動 +28 天</div>
@@ -4101,7 +4113,7 @@ td.sticky-col {
               })}
             </td>
             <td>
-              <input type="date" class="ms-date-input" value="${r.p2Start || ''}"
+              <input type="date" class="ms-date-input" value="${escapeHtml(r.p2Start || '')}"
                 title="輸入開始日期將自動推算 +28 天結束日期"
                 onchange="updateOptStartAndAutoEnd(${i}, 'p2Start', 'p2End', this.value)">
               <div class="cell-hint">輸入自動 +28 天</div>
@@ -4150,11 +4162,11 @@ td.sticky-col {
             <td class="sticky-col">
               <span class="subject-id">${escapeHtml(r.id)}</span>
               ${studentFilter !== 'ALL' || statusFilter !== 'ALL' || keyword ? `<div class="match-hint">符合節點 ${matchedCount} 筆</div>` : ''}
-              <input type="text" class="subject-name-input" value="${r.name || ''}" placeholder="姓氏"
+              <input type="text" class="subject-name-input" value="${escapeHtml(r.name || '')}" placeholder="姓氏"
                 onchange="updateTableField('music40', ${i}, 'name', this.value)">
             </td>
             <td>
-              <input type="date" class="ms-date-input" value="${r.startDate || ''}"
+              <input type="date" class="ms-date-input" value="${escapeHtml(r.startDate || '')}"
                 onchange="updateMusicStart(${i}, this.value)">
               <div style="font-size:10px; color:var(--muted); margin-top:3px;">基準介入日</div>
             </td>
@@ -4261,18 +4273,18 @@ td.sticky-col {
             <div style="background:#f1f5f9; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; border-bottom:1px solid var(--line);">
               <div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <strong style="font-size:15px; color:var(--navy);">🧪 ${stObj.code}</strong>
+                  <strong style="font-size:15px; color:var(--navy);">🧪 ${escapeHtml(stObj.code)}</strong>
                   <span class="badge badge-future" style="font-size:11px;">共 ${stObj.subjects ? stObj.subjects.length : 0} 位個案</span>
                 </div>
                 <div style="font-size:12px; color:var(--muted); margin-top:4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                  ${stObj.description ? `<span>📝 ${stObj.description}</span><span>•</span>` : ''}
+                  ${stObj.description ? `<span>📝 ${escapeHtml(stObj.description)}</span><span>•</span>` : ''}
                   <span>預設負責人：${renderStudentPill(stObj.defaultOwner)}</span>
                   <span>•</span>
-                  <span>追蹤節點：${milestones.map(m => `<code>${m.label} (+${m.offsetDays}天${m.rule === 'OPT_T' ? '⚡' : ''})</code>`).join(' ➔ ') || '<span class="muted">未設定</span>'}</span>
+                  <span>追蹤節點：${milestones.map(m => `<code>${escapeHtml(m.label)} (+${escapeHtml(m.offsetDays)}天${m.rule === 'OPT_T' ? '⚡' : ''})</code>`).join(' ➔ ') || '<span class="muted">未設定</span>'}</span>
                 </div>
               </div>
               <div style="display:flex; gap:8px;">
-                <button type="button" class="btn btn-primary btn-xs" onclick="openAddSubjectModal('${stObj.code}')">＋ 新增受試者</button>
+                <button type="button" class="btn btn-primary btn-xs" onclick="openAddSubjectModal(${jsArg(stObj.code)})">＋ 新增受試者</button>
                 <button type="button" class="btn btn-secondary btn-xs" onclick="openEditStudyModal(${sIdx})" title="修改研究案名稱、備註或增減追蹤時間點">✏️ 編輯時間點與設定</button>
                 <button type="button" class="btn btn-danger-outline btn-xs" onclick="deleteCustomStudy(${sIdx})">刪除研究案</button>
               </div>
@@ -4285,9 +4297,9 @@ td.sticky-col {
                     <th>實驗開始日<br><small>(可點擊一鍵推算)</small></th>
                     ${milestones.map(m => `
                       <th>
-                        <div>${m.label}</div>
+                        <div>${escapeHtml(m.label)}</div>
                         <div style="font-weight:normal; font-size:10px; color:var(--muted); margin-top:2px;">
-                          預設 +${m.offsetDays} 天
+                          預設 +${escapeHtml(m.offsetDays)} 天
                           ${m.rule === 'OPT_T' ? '<span class="badge badge-red" style="font-size:9px; padding:0 3px; margin-left:2px;">⚡重大急件</span>' : ''}
                         </div>
                       </th>
@@ -4307,7 +4319,7 @@ td.sticky-col {
                       </td>
                       <td>
                         <div class="inline-actions">
-                          <input type="date" class="ms-date-input" value="${sub.startDate || ''}"
+                          <input type="date" class="ms-date-input" value="${escapeHtml(sub.startDate || '')}"
                             title="修改開始日期自動推算各期程"
                             onchange="updateCustomSubStart(${sIdx}, ${subIdx}, this.value)">
                           ${sub.startDate ? `
@@ -4323,16 +4335,16 @@ td.sticky-col {
                           <td>
                             <div class="ms-cell ${st.cellClass}">
                               <div class="ms-row-top">
-                                <input type="date" class="ms-date-input" value="${item.date || ''}"
-                                  onchange="updateCustomItem(${sIdx}, ${subIdx}, '${m.key}', 'date', this.value)">
-                                <input type="text" class="ms-owner-input" list="labMembersDatalist" value="${item.owner || ''}" placeholder="負責人"
-                                  onchange="updateCustomItem(${sIdx}, ${subIdx}, '${m.key}', 'owner', this.value)">
+                                <input type="date" class="ms-date-input" value="${escapeHtml(item.date || '')}"
+                                  onchange="updateCustomItem(${sIdx}, ${subIdx}, ${jsArg(m.key)}, 'date', this.value)">
+                                <input type="text" class="ms-owner-input" list="labMembersDatalist" value="${escapeHtml(item.owner || '')}" placeholder="負責人"
+                                  onchange="updateCustomItem(${sIdx}, ${subIdx}, ${jsArg(m.key)}, 'owner', this.value)">
                               </div>
                               <div class="ms-row-bottom">
                                 <span class="badge ${st.badgeClass}" style="font-size:10px; padding:1px 6px;">${st.label}</span>
                                 ${item.date ? `
                                   <button type="button" class="toggle-done-btn ${item.done ? 'is-done' : (st.code === 'OVERDUE' ? 'is-overdue' : '')}"
-                                    onclick="updateCustomItem(${sIdx}, ${subIdx}, '${m.key}', 'done', ${!item.done})">
+                                    onclick="updateCustomItem(${sIdx}, ${subIdx}, ${jsArg(m.key)}, 'done', ${!item.done})">
                                     ${item.done ? '✓完成' : (st.code === 'OVERDUE' ? '逾期!' : '待辦')}
                                   </button>
                                 ` : ''}
@@ -4704,8 +4716,8 @@ td.sticky-col {
         return `
           <tr>
             <td>${renderStudentPill(mem.id)}</td>
-            <td><strong>${mem.name || mem.id}</strong></td>
-            <td><span class="muted">${mem.role || '未備註'}</span></td>
+            <td><strong>${escapeHtml(mem.name || mem.id)}</strong></td>
+            <td><span class="muted">${escapeHtml(mem.role || '未備註')}</span></td>
             <td>
               <div style="font-size:11px; display:flex; gap:4px; flex-wrap:wrap;">
                 ${overdue > 0 ? `<span class="badge badge-overdue" style="font-size:10px;">逾期 ${overdue}</span>` : ''}
@@ -4744,7 +4756,7 @@ td.sticky-col {
       const members = appData.members || [];
       sel.innerHTML = members.map(m => {
         const isSel = (m.id === selectedVal) ? 'selected' : '';
-        return `<option value="${m.id}" ${isSel}>${m.id} ${m.name && m.name !== m.id ? `(${m.name})` : ''}</option>`;
+        return `<option value="${escapeHtml(m.id)}" ${isSel}>${escapeHtml(m.id)} ${m.name && m.name !== m.id ? `(${escapeHtml(m.name)})` : ''}</option>`;
       }).join('');
     }
 
@@ -4858,13 +4870,13 @@ td.sticky-col {
           <tr>
             <td style="text-align:center; font-weight:700; color:var(--muted);">${idx + 1}</td>
             <td>
-              <input type="text" style="width:100%;" value="${m.label || ''}" placeholder="例如：1個月成果收案"
+              <input type="text" style="width:100%;" value="${escapeHtml(m.label || '')}" placeholder="例如：1個月成果收案"
                 oninput="editingMilestones[${idx}].label = this.value">
             </td>
             <td>
               <div class="inline-actions">
                 <span>+</span>
-                <input type="number" style="width:70px;" value="${m.offsetDays || 0}" min="0" step="1"
+                <input type="number" style="width:70px;" value="${escapeHtml(m.offsetDays || 0)}" min="0" step="1"
                   oninput="editingMilestones[${idx}].offsetDays = Number(this.value)">
                 <span>天</span>
                 <div style="display:flex; gap:2px; margin-left:4px;">
@@ -4880,7 +4892,7 @@ td.sticky-col {
             <td>
               <select style="width:100%;" onchange="editingMilestones[${idx}].owner = this.value">
                 <option value="">同研究預設</option>
-                ${members.map(mem => `<option value="${mem.id}" ${m.owner === mem.id ? 'selected' : ''}>${mem.id}</option>`).join('')}
+                ${members.map(mem => `<option value="${escapeHtml(mem.id)}" ${m.owner === mem.id ? 'selected' : ''}>${escapeHtml(mem.id)}</option>`).join('')}
               </select>
             </td>
             <td>
