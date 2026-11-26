@@ -122,6 +122,25 @@ normalize_url() {
   printf '%s' "$1" | sed -e 's#^git@github\.com:#https://github.com/#' -e 's#\.git$##' -e 's#/*$##'
 }
 
+# ---------------------------------------------------------------------------
+# 0. 安全檢查：這裡真的是要更新的那個 repo 嗎？
+#
+# 這支腳本會 git reset --hard。它操作的是「自己所在的那個 repo」，不是目前
+# 所在的資料夾 —— 所以如果有人從別的資料夾呼叫這一份，被改的會是它自己住的
+# repo。先確認這裡看起來就是這個系統，避免改錯地方。
+# ---------------------------------------------------------------------------
+if [ ! -f index.html ] || [ ! -f package.json ]; then
+  fail "「$REPO_ROOT」看起來不是這個系統的 repo（找不到 index.html 或 package.json），拒絕更新" 6
+fi
+
+# 不是 git repo 就沒什麼好同步的（例如把專案解壓縮成一份純檔案來交付）。
+# 這不是錯誤，安靜結束即可 —— 排程只在真正的 git checkout 裡執行。
+# 必須放在所有 git 查詢之前：後面找 commit 作者時會沒有歷史可用。
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  log "這裡不是 git repo，沒有東西可以同步。"
+  exit 0
+fi
+
 # commit 要用的作者身分。
 #
 # 為什麼不是固定的 bot 信箱：Vercel 的原生 Git 整合在建立部署之前，會檢查
@@ -171,26 +190,6 @@ commit_as_author() { # $1 = 訊息；其餘參數交給 git commit
   shift
   git -c "user.name=$author_name" -c "user.email=$author_email" commit "$@" -m "$message"
 }
-
-# ---------------------------------------------------------------------------
-# 0. 安全檢查：這裡真的是要更新的那個 repo 嗎？
-#
-# 這支腳本會 git reset --hard。它操作的是「自己所在的那個 repo」，不是目前
-# 所在的資料夾 —— 所以如果有人從別的資料夾呼叫這一份，被改的會是它自己住的
-# repo。先確認這裡看起來就是這個系統，避免改錯地方。
-# ---------------------------------------------------------------------------
-if [ ! -f index.html ] || [ ! -f package.json ]; then
-  fail "「$REPO_ROOT」看起來不是這個系統的 repo（找不到 index.html 或 package.json），拒絕更新" 6
-fi
-
-# 不是 git repo 就沒什麼好同步的（例如把專案解壓縮成一份純檔案來交付）。
-# 這不是錯誤，安靜結束即可 —— 排程只在真正的 git checkout 裡執行。
-# 必須放在所有 git 查詢之前：後面找 commit 作者時會沒有歷史可用。
-if ! git rev-parse --git-dir >/dev/null 2>&1; then
-  log "這裡不是 git repo，沒有東西可以同步。"
-  exit 0
-fi
-
 
 # ---------------------------------------------------------------------------
 # 1. 確認 upstream 在哪（先不動 remote，等自我檢查過再說）
