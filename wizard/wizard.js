@@ -951,6 +951,7 @@ function main() {
   bindFieldInputs(elements, state);
   bindCopyButtons(elements, doc);
   bindVerifyButtons(elements, state);
+  bindDatabaseAutoDetect(elements, state);
 
   renderMigrationSql(elements, doc);
   renderDeploySection(elements);
@@ -984,7 +985,11 @@ function collectElements(doc) {
     deployUrlText: doc.getElementById('deployUrlText'),
     doneUrl: doc.getElementById('doneUrl'),
     doneSiteUrlHint: doc.getElementById('doneSiteUrlHint'),
-    doneUrlLink: doc.getElementById('doneUrlLink')
+    doneUrlLink: doc.getElementById('doneUrlLink'),
+    dbAutoDetectBtn: doc.getElementById('dbAutoDetectBtn'),
+    dbAutoNote: doc.getElementById('dbAutoNote'),
+    dbAutoResult: doc.getElementById('dbAutoResult'),
+    dbManualTitle: doc.getElementById('dbManualTitle')
   };
 }
 
@@ -1734,6 +1739,144 @@ async function verifyDeploy(state) {
   };
 }
 
+// 自動從「已經部署好的網站」把資料庫連線資訊抓回來。
+//
+// 為什麼要做這件事：第 4 步最麻煩的地方是「要去 Supabase 後台抄兩個值」——
+// 一個網址、一串金鑰。但這兩件事網站自己早就知道了（它就是靠它們連上資料庫的）：
+// /api/config 會回 supabaseUrl 與 anonKey，而且那個端點本來就開放跨網域
+// （引導網頁要靠它判斷部署成不成功）。
+//
+// 所以只要網站已經連上資料庫，這一步就完全不用抄：按一個按鈕就填好。
+// 抄的那條路仍然保留（網站還沒連上資料庫時，就只能自己填）。
+//
+// 安全：anonKey 是「本來就會出現在網頁程式碼裡」的那把，不是 secret。
+// 這裡也刻意只接受 sb_publishable_ / anon 這兩種，secret 一律拒絕。
+export async function fetchDatabaseConfigFromSite(siteUrl) {
+  const base = normalizeSiteUrl(siteUrl);
+  if (!base) {
+    return { ok: false, reason: 'no-site', message: '還不知道你的網站網址，所以沒辦法自動抓。請先回第 3 步填好網址。' };
+  }
+
+  let response;
+  try {
+    response = await fetchWithTimeout(`${base}/api/config`, {
+      headers: { accept: 'application/json' }
+    });
+  } catch (error) {
+    const info = classifyFetchError(error);
+    return {
+      ok: false,
+      reason: 'unreachable',
+      message: `連不到你的網站（${info.kind === 'timeout' ? info.message : '可能是網路或跨網域限制'}）。`
+        + '網站如果才剛部署完，可能還要等一兩分鐘。'
+    };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: 'http', message: `你的網站回了 HTTP ${response.status}，我不確定這是什麼狀況。` };
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, reason: 'bad-json', message: '你的網站回了看不懂的內容。' };
+  }
+
+  const url = normalizeSupabaseUrl(payload && payload.supabaseUrl);
+  const key = String((payload && (payload.anonKey || payload.supabaseAnonKey)) || '').trim();
+
+  if (!url || !key) {
+    // 這裡是最常見的情況：網站部署好了，但還沒接資料庫。
+    // 這完全不是錯誤 —— 第 3 步的部署流程本來就可以先跳過資料庫。
+    return {
+      ok: false,
+      reason: 'not-configured',
+      message: '你的網站已經上線了，但它還沒連上資料庫。'
+        + '所以接下來要自己建一個（照下面的步驟），建好之後網站就會自動知道。'
+    };
+  }
+
+  const keyKind = classifySupabaseKey(key);
+  if (keyKind.kind === 'secret') {
+    return { ok: false, reason: 'secret-key', message: '你的網站回了 secret 金鑰，這不對勁。請把這個情況回報給維護者。' };
+  }
+
+  return { ok: true, supabaseUrl: url, publishableKey: key };
+}
+
+// 第 4 步的「自動偵測我的資料庫」按鈕。
+//
+// 為什麼值得做：第 4 步原本要使用者去 Supabase 後台抄兩個值，
+// 一個是網址（Settings → Data API）、一個是金鑰（Settings → API Keys），
+// 而且金鑰有兩種（publishable / secret），抄錯的比例很高。
+// 但網站自己就知道這兩個值 —— /api/config 本來就會回它們。
+//
+// 所以：網站已經連上資料庫 → 按一下就填好，完全不用抄。
+//       網站還沒連上資料庫 → 明確告訴他「還沒連上」，然後照下面的手動步驟做。
+// 兩條路都要能走完，不能因為自動偵測失敗就卡住。
+function bindDatabaseAutoDetect(elements, state) {
+  const button = elements.dbAutoDetectBtn;
+  if (!button) return;
+
+  button.addEventListener('click', async () => {
+    if (button.disabled) return;
+
+    const siteUrl = normalizeSiteUrl(state.siteUrl);
+    setBusy(button, true);
+    renderDbAutoResult(elements, 'pending', '正在問你的網站…');
+
+    let result;
+    try {
+      result = await fetchDatabaseConfigFromSite(siteUrl);
+    } catch (error) {
+      result = { ok: false, reason: 'unexpected', message: `偵測時發生意外狀況：${error && error.message ? error.message : '未知錯誤'}` };
+    } finally {
+      setBusy(button, false);
+    }
+
+    if (!result.ok) {
+      renderDbAutoResult(elements, result.reason === 'not-configured' ? 'warn' : 'error', result.message, result.reason);
+      return;
+    }
+
+    // 填進表單，並且「真的觸發 input 事件」—— 這樣既有的欄位綁定
+    // （清除舊驗證結果、存到 localStorage、更新其他動態文字）才會跟著跑。
+    // 直接改 value 不動事件的話，畫面看起來填好了，但狀態是空的。
+    fillField('supabaseUrl', result.supabaseUrl);
+    fillField('publishableKey', result.publishableKey);
+
+    renderDbAutoResult(elements, 'ok',
+      '找到了！你的網站已經接上資料庫，下面兩個欄位已經幫你填好。<br>'
+      + `資料庫網址：<code>${escapeHtml(result.supabaseUrl)}</code><br>`
+      + '接著按下面的「驗證連線」確認一次就可以往下一步。',
+      'ok');
+  });
+}
+
+function fillField(name, value) {
+  const field = document.querySelector(`[data-field="${name}"]`);
+  if (!field) return;
+  field.value = value;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function renderDbAutoResult(elements, tone, html, reason) {
+  const box = elements.dbAutoResult;
+  if (!box) return;
+  box.hidden = false;
+  box.dataset.tone = tone === 'pending' ? 'info' : tone;
+  if (reason) box.dataset.reason = reason;
+  else delete box.dataset.reason;
+  box.innerHTML = html;
+
+  if (elements.dbAutoNote) {
+    elements.dbAutoNote.textContent = tone === 'ok'
+      ? '已填好，不用再到 Supabase 後台抄。'
+      : '沒關係，照下面的步驟自己填也可以。';
+  }
+}
+
 async function verifyDatabase(state) {
   const supabaseUrl = normalizeSupabaseUrl(state.supabaseUrl);
   const key = String(state.publishableKey || '').trim();
@@ -2087,7 +2230,9 @@ function renderMigrationSql(elements) {
   segments.forEach(segment => {
     const wrap = document.createElement('details');
     wrap.className = 'sql-block';
-    if (segments.length === 1) wrap.open = false;
+    // 一律收起：這是「想確認內容」時才展開的東西，不是操作步驟。
+    // 之前第一段預設展開，會讓人以為「就是要一段一段處理」。
+    wrap.open = false;
 
     const summary = document.createElement('summary');
     summary.className = 'sql-summary';
@@ -2112,7 +2257,7 @@ function renderMigrationSql(elements) {
 
     const note = document.createElement('span');
     note.className = 'sql-note';
-    note.textContent = '整段複製，貼到 Supabase 的 SQL Editor，按 RUN。';
+    note.textContent = '這是整份語法的其中一段（只想看內容時再展開）。';
     toolbar.appendChild(note);
 
     body.appendChild(toolbar);
@@ -2127,23 +2272,31 @@ function renderMigrationSql(elements) {
     container.appendChild(wrap);
   });
 
-  // 「複製全部」按鈕（多段時才有意義）
+  // 「複製整份語法」按鈕：這是主要動作，不是備援。
+  //
+  // 以前這裡標成「複製全部（一段一段貼時不要用這個）」，等於叫人不要用
+  // 最省事的那條路。但實際上整份貼一次是最好的做法：
+  //   1. 三段有依賴順序（002 需要 001 的 current_lab_role()），
+  //      整份貼讓 PostgreSQL 自己照順序跑，不會漏。
+  //   2. 分段貼最常見的失敗是「漏掉最後一段」，而那一段漏掉時**沒有任何
+  //      錯誤訊息** —— 系統看起來完全正常，只有自動更新開關按不動。
+  //   3. 已在真的 PostgreSQL 上驗證：三段一起貼、單一交易、按一次 RUN，成功。
+  //
+  // 所以按鈕永遠顯示，而且文字就是「複製整份語法」。
   const copyAll = document.getElementById('copyAllSql');
+  const combinedSql = segments.map(segment => segment.sql).join('\n\n');
   if (copyAll) {
-    if (segments.length > 1) {
-      copyAll.hidden = false;
-      copyAll.dataset.copy = 'value';
-      copyAll.dataset.copyValue = segments.map(segment => segment.sql).join('\n\n');
-    } else {
-      copyAll.hidden = true;
-    }
+    copyAll.hidden = false;
+    copyAll.dataset.copy = 'value';
+    copyAll.dataset.copyValue = combinedSql;
   }
 
-  const meta = document.getElementById('sqlSegmentCount');
-  if (meta) {
-    meta.textContent = segments.length === 1
-      ? '這份建表語法只有 1 段，全部貼進去就好。'
-      : `這份建表語法分成 ${segments.length} 段，請「照順序」一段一段貼進 SQL Editor，每段都要按一次 RUN。`;
+  // 字元數：讓使用者知道「複製到的內容是不是完整的」。
+  // 貼上被截斷時，畫面上只會是一個看不懂的語法錯誤；先給一個數字，
+  // 他至少能比對「我複製到的是不是這麼長」。
+  const charCount = document.getElementById('sqlCharCount');
+  if (charCount) {
+    charCount.textContent = combinedSql.length.toLocaleString('en-US');
   }
 }
 

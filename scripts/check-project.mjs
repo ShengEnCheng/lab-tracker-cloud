@@ -484,7 +484,7 @@ check('使用者可見的「引導網頁第 N 步」沒有差一號', () => {
     { step: 'github', pattern: /github\.com\/signup/i },
     { step: 'database', pattern: /supabase\.com\/dashboard/i },
     { step: 'database', pattern: /Supabase\s*資料庫|建立資料庫|連到資料庫|資料庫的連線|金鑰填好/ },
-    { step: 'schema', pattern: /建表語法|資料表|SQL Editor|複製第一段|複製第二段/ },
+    { step: 'schema', pattern: /建表語法|資料表|SQL Editor|複製第一段|複製第二段|複製整份語法/ },
     { step: 'deploy', pattern: /Deploy to Vercel|複製程式碼|部署|Vercel/ },
     { step: 'admin', pattern: /管理員帳號|第一次使用/ }
   ];

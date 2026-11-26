@@ -218,6 +218,34 @@ async function journey() {
   // ============ 第 5 步：建資料表 ============
   // 段數從 migration 檔算（由 Node 端注入 __expectedSegments），不寫死。
   // 寫死的話，加新的一段時會紅一個看起來像「壞了」的燈，但其實是測試過期。
+  // 第 5 步唯一該做的事是「複製整份、貼一次、按一次 RUN」。
+  // 以前把「複製全部」標成「一段一段貼時不要用這個」，等於叫人不要用最省事的路。
+  check('第 5 步有一個「複製整份語法」的主要按鈕', () => {
+    const btn = document.getElementById('copyAllSql');
+    return Boolean(btn) && !btn.hidden;
+  });
+  check('「複製整份」按鈕複製的是全部段落串起來的內容', () => {
+    const btn = document.getElementById('copyAllSql');
+    if (!btn) return false;
+    const value = btn.dataset.copyValue || '';
+    // 三段都要在裡面：開頭、設定表、自動更新欄位
+    return value.includes('lab_profiles') && value.includes('lab_settings') && value.includes('auto_update_enabled');
+  });
+  check('第 5 步有告訴使用者「貼兩次也不會壞」', () => {
+    const text = document.getElementById('panel-schema').textContent;
+    return /貼兩次也不會壞|貼兩次[^。]{0,6}(安全|不會)/.test(text);
+  });
+  check('第 5 步說明「漏掉最後一段不會有錯誤訊息」', () => {
+    const text = document.getElementById('panel-schema').textContent;
+    return /不會有任何錯誤訊息|沒有任何錯誤訊息/.test(text);
+  });
+  check('第 4 步有「自動偵測我的資料庫」按鈕', () => {
+    return Boolean(document.getElementById('dbAutoDetectBtn'));
+  });
+  check('第 4 步的自動偵測有說「不用去後台抄」', () => {
+    const text = document.getElementById('dbAutoPanel')?.textContent || '';
+    return /不用你?去?後台抄|不用.*抄/.test(text);
+  });
   check('第 5 步有 ' + window.__expectedSegments + ' 段建表語法可複製（與 migration 檔數一致）',
     () => $$('#sqlSegments details').length === window.__expectedSegments);
   check('建表語法裡有 do $$ 區塊（沒有被吃掉）',

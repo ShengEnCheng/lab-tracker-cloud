@@ -472,6 +472,101 @@ test('wizard：Deploy Button 網址', async (t) => {
   });
 });
 
+test('wizard：從網站自動抓資料庫連線資訊', async (t) => {
+  // 第 4 步最大的摩擦點是「去 Supabase 後台抄兩個值」。
+  // 但網站自己就知道那兩個值（它就是靠它們連上資料庫的），
+  // /api/config 也本來就會回。能自動就自動，不能自動才讓人手抄。
+  const { fetchDatabaseConfigFromSite } = wizard;
+
+  const realFetch = globalThis.fetch;
+
+  function stubFetch(handler) {
+    globalThis.fetch = async (url, options) => handler(String(url), options);
+  }
+
+  t.afterEach(() => { globalThis.fetch = realFetch; });
+  t.after(() => { globalThis.fetch = realFetch; });
+
+  await t.test('網站已經接好資料庫 → 把網址與金鑰帶回來', async () => {
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        backendConfigured: true,
+        supabaseUrl: 'https://abcdefgh.supabase.co',
+        anonKey: 'sb_publishable_ABC123'
+      })
+    }));
+    const result = await fetchDatabaseConfigFromSite('https://lab.example.com');
+    assert.equal(result.ok, true);
+    assert.equal(result.supabaseUrl, 'https://abcdefgh.supabase.co');
+    assert.equal(result.publishableKey, 'sb_publishable_ABC123');
+  });
+
+  await t.test('網站還沒接資料庫 → 不是錯誤，要說「還沒接」', async () => {
+    // 這個分支最常見：部署時跳過了資料庫（第 3 步允許跳過）。
+    // 如果這裡回一個看起來像錯誤的訊息，使用者會以為自己做壞了。
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ backendConfigured: false, supabaseUrl: '', anonKey: '' })
+    }));
+    const result = await fetchDatabaseConfigFromSite('https://lab.example.com');
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'not-configured');
+    assert.match(result.message, /還沒連上資料庫/);
+  });
+
+  await t.test('網站還沒填網址 → 叫使用者先回上一步', async () => {
+    const result = await fetchDatabaseConfigFromSite('');
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'no-site');
+  });
+
+  await t.test('連不上網站 → 要講網路或跨網域，不是「你做錯了」', async () => {
+    stubFetch(() => { throw new TypeError('Failed to fetch'); });
+    const result = await fetchDatabaseConfigFromSite('https://lab.example.com');
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'unreachable');
+    assert.doesNotMatch(result.message, /你沒有|你做錯/);
+  });
+
+  await t.test('舊格式的 anon 金鑰也要接受（既有研究室還在用）', async () => {
+    // Supabase 正在汰換 anon → publishable，兩套現在同時有效。
+    // 只認 sb_publishable_ 的話，既有的研究室會突然接不上。
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        backendConfigured: true,
+        supabaseUrl: 'https://abcdefgh.supabase.co',
+        // 刻意用一個明顯是假的字串：真的 anon key 是 JWT，長度超過 200 字元。
+        // 這裡只要驗「非 publishable 的金鑰也要接受」，不需要真的一把。
+        anonKey: 'anon-legacy-test-key-not-a-real-jwt'
+      })
+    }));
+    const result = await fetchDatabaseConfigFromSite('https://lab.example.com');
+    assert.equal(result.ok, true);
+  });
+
+  await t.test('網站回了 secret 金鑰 → 不可以拿來用，要回報', async () => {
+    // 這是一道安全網：如果真的從網站撈到 secret key，代表伺服器設定有問題，
+    // 這時候更不可以把它填進表單、存進 localStorage。
+    stubFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        backendConfigured: true,
+        supabaseUrl: 'https://abcdefgh.supabase.co',
+        anonKey: 'sb_secret_LEAKED'
+      })
+    }));
+    const result = await fetchDatabaseConfigFromSite('https://lab.example.com');
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'secret-key');
+  });
+});
+
 test('wizard：步驟判定', async (t) => {
   await t.test('前面步驟沒過會提醒', () => {
     const result = wizard.getStepPrerequisite('done', {});

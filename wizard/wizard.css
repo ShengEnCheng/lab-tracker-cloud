@@ -762,6 +762,105 @@ strong { font-weight: 700; }
    10. 建表語法區塊
    -------------------------------------------------------------------------- */
 
+/* 第 4 步的自動偵測面板：把「去後台抄兩個值」變成「按一個按鈕」。
+   用 action 色系（不是 info），因為它是一個要按的動作，不是純說明。 */
+.callout--action {
+  border-left: 4px solid var(--brand);
+  background: #f2f7ff;
+}
+
+.db-auto-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.db-auto-note {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: .92rem;
+  color: var(--ink-soft);
+}
+
+.db-auto-result {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  font-size: .94rem;
+  line-height: 1.65;
+}
+
+.db-auto-result[data-tone="ok"] { border-color: var(--ok); background: var(--ok-tint); }
+.db-auto-result[data-tone="warn"] { border-color: var(--warn); background: var(--warn-tint); }
+.db-auto-result[data-tone="error"] { border-color: var(--bad); background: var(--bad-tint); }
+
+.db-auto-result code {
+  font-family: var(--mono);
+  font-size: .86em;
+  background: var(--paper);
+  padding: 2px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.section-title {
+  margin: 30px 0 14px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font-size: 1.06rem;
+}
+
+@media (max-width: 640px) {
+  .db-auto-row { flex-direction: column; align-items: stretch; }
+  #dbAutoDetectBtn { width: 100%; }
+}
+
+/* 主要動作：複製整份語法。
+   放在最上面、用主色，因為這是這一步唯一要做的事。
+   下面的分段區塊只是「想確認內容」時才展開的參考資料。 */
+.sql-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-sm);
+  background: #f2f7ff;
+}
+
+.btn-copy-primary {
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 10px 22px;
+  font-size: 1rem;
+  font-weight: 800;
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+.btn-copy-primary:hover { background: var(--brand-dark); }
+
+.btn-copy-primary.is-copied,
+.btn-copy-primary[data-flash="ok"] {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.sql-primary-note {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: .92rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
 .sql-block {
   margin: 18px 0;
   border: 1px solid var(--line-strong);
@@ -1166,6 +1265,9 @@ details[open] .sql-toggle::before { content: "收起 ▴"; }
   .done-url .done-url-value { font-size: 1.12rem; }
 
   .sql-code { max-height: 300px; font-size: .76rem; }
+
+  .sql-primary { flex-direction: column; align-items: stretch; }
+  .btn-copy-primary { width: 100%; }
 
   .faq .faq-body { padding-left: 17px; }
 }

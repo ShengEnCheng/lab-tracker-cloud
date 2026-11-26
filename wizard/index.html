@@ -789,6 +789,22 @@ update public.lab_settings
           </p>
         </div>
 
+        <!-- 自動偵測：這一步最容易卡住的地方是「要去後台抄兩個值」。
+             但網站自己早就知道那兩個值（它就是靠它們連上資料庫的），
+             所以先讓它自己講，能省掉整段手抄流程。 -->
+        <div class="callout callout--action" id="dbAutoPanel">
+          <h3>先讓你的網站自己說</h3>
+          <p>
+            你的網站如果已經接上資料庫，它自己就知道「資料庫在哪」和「用哪把鑰匙」，
+            不用你去後台抄。
+          </p>
+          <div class="db-auto-row">
+            <button type="button" class="btn btn-primary" id="dbAutoDetectBtn">自動偵測我的資料庫</button>
+            <span class="db-auto-note" id="dbAutoNote">按一下，我會去問你的網站。</span>
+          </div>
+          <div class="db-auto-result" id="dbAutoResult" hidden></div>
+        </div>
+
         <div class="callout callout--info">
           <h3>如果你在部署時已經跳過 Supabase</h3>
           <p>
@@ -849,6 +865,8 @@ update public.lab_settings
             </li>
           </ul>
         </div>
+
+        <h3 class="section-title" id="dbManualTitle">沒有的話，自己建一個（照著做，約 3 分鐘）</h3>
 
         <div class="field">
           <label for="field-supabaseUrl">你的 Supabase 專案網址</label>
@@ -917,25 +935,51 @@ update public.lab_settings
            ============================================================== -->
       <section class="panel" data-panel="schema" id="panel-schema">
         <div class="panel-kicker">第 5 步</div>
-        <h2>在資料庫裡建立資料表</h2>
+        <h2>把資料表建起來（複製一次、貼一次）</h2>
 
         <div class="prereq-banner" data-prerequisite hidden></div>
 
         <div class="prose">
           <p>
             資料庫現在是空的，像一間剛裝潢好但沒有櫃子的房間。
-            這一步要把「櫃子」做好——也就是建立<strong>資料表</strong>
-            （表格的意思：欄位與規則）。
+            這一步要把「櫃子」做好——也就是建立<strong>資料表</strong>。
           </p>
-          <p class="plain-hint">
-            做法是：把下面的「建表語法」複製，貼到 Supabase 的 SQL Editor（貼程式碼的地方）跑。
-            這份語法分成幾段，<strong>照順序一段一段貼，每段都要按一次 RUN</strong>。
-            跑完就永遠有效，不用每次做。
+          <p>
+            做法只有一個動作：<strong>把下面整份語法複製起來，貼進 Supabase 的
+            SQL Editor，按一次 RUN。</strong>
           </p>
         </div>
 
         <div class="callout callout--info">
-          <h3>怎麼貼？每一段都做這四個動作</h3>
+          <h3>為什麼是「整份一次貼」</h3>
+          <p>
+            這份語法看起來分成幾段，但<strong>它們必須照順序執行</strong>——
+            先建角色、再建資料表、最後加欄位。整份貼在一起按一次 RUN，
+            Supabase 會自己照順序跑完。
+          </p>
+          <p class="plain-hint" style="margin-top:8px">
+            分段貼也可以，但很容易在中間漏掉一段。漏掉的最後一段不會有任何錯誤訊息，
+            系統看起來完全正常，只有「系統設定」裡的自動更新開關會按不動。
+            所以請整份貼。<strong>貼兩次也不會壞</strong>，可以放心重貼。
+          </p>
+        </div>
+
+        <div class="callout">
+          <h3>要貼的建表語法</h3>
+          <div class="sql-primary">
+            <button type="button" class="btn btn-copy btn-copy-primary" id="copyAllSql" data-copy="value">
+              複製整份語法
+            </button>
+            <span class="sql-primary-note">
+              按了之後，到 Supabase 的 SQL Editor 貼上（<code>⌘</code>+<code>V</code> / <code>Ctrl</code>+<code>V</code>），
+              再按右下角的 <strong>RUN</strong>。
+            </span>
+          </div>
+          <div id="sqlSegments"></div>
+        </div>
+
+        <div class="callout callout--info">
+          <h3>怎麼打開 SQL Editor（照著點）</h3>
           <ol class="action-list" style="margin:12px 0 0">
             <li>打開你的 Supabase 專案後台。</li>
             <li>
@@ -943,20 +987,13 @@ update public.lab_settings
               <span class="plain-hint">如果選單收起來了，先按左上角的選單圖示展開。</span>
             </li>
             <li>
-              按 <strong>New query</strong>，把第 1 段語法貼進去。
-              <span class="plain-hint">有幾段就重複幾次：每次都要先按 New query 開一個新的，再貼下一段。</span>
+              按 <strong>New query</strong> 開一個空白編輯區。
             </li>
-            <li>按右下角的 <strong>RUN</strong>（或按 <code>⌘</code>+<code>Enter</code> / <code>Ctrl</code>+<code>Enter</code>）。</li>
+            <li>
+              貼上剛剛複製的整份語法，按右下角的 <strong>RUN</strong>
+              （或按 <code>⌘</code>+<code>Enter</code> / <code>Ctrl</code>+<code>Enter</code>）。
+            </li>
           </ol>
-        </div>
-
-        <div class="callout">
-          <h3>要貼的建表語法</h3>
-          <p id="sqlSegmentCount" class="plain-hint" style="margin-bottom:6px"></p>
-          <div id="sqlSegments"><!-- 由 wizard.js 從上面的 migrationSql 產生 --></div>
-          <button type="button" class="btn btn-copy" id="copyAllSql" data-copy="value" hidden>
-            複製全部（一段一段貼時不要用這個）
-          </button>
         </div>
 
         <div class="callout callout--warn">
@@ -964,26 +1001,28 @@ update public.lab_settings
           <p>
             畫面下方會出現 <strong>「Success. No rows returned」</strong>（成功，沒有回傳資料列）。
             這是正常的——建資料表不會產生資料。
-            如果出現<strong>紅字錯誤</strong>，通常是：(1) 貼上的內容被截斷了、
-            (2) 你貼到別的專案去了。把紅字截圖，第 7 步有寫可以找誰。
+          </p>
+          <p style="margin-top:8px">
+            如果出現<strong>紅字錯誤</strong>，最常見的是貼上的內容被截斷了
+            （整份大約 <span id="sqlCharCount">—</span> 個字元，複製時要全選）。
+            按 <strong>New query</strong> 開一個乾淨的再貼一次就好，貼兩次不會壞。
           </p>
         </div>
 
         <details class="advanced">
-          <summary>進階：這段語法到底做了什麼</summary>
+          <summary>進階：這份語法到底做了什麼</summary>
           <div class="advanced-body">
             <p>
               簡單說，它建立了六個資料表，並設好「誰能看、誰能改」的規則。
-              <strong>第 1 段</strong>處理實驗資料本身：
             </p>
             <ul>
               <li><code>lab_state</code>：全部實驗資料都存在這裡（只有一列）。</li>
               <li><code>lab_profiles</code>：成員帳號與角色（誰是管理員、誰是一般研究者）。</li>
               <li><code>lab_audit_logs</code>：誰在什麼時候改了什麼（稽核紀錄）。</li>
               <li><code>lab_backups</code>、<code>lab_backup_runs</code>：備份與備份紀錄。</li>
+              <li><code>lab_settings</code>：研究室的顯示設定（名稱、代碼、聯絡信箱），
+                以及自動更新開關。</li>
             </ul>
-            <p><strong>第 2 段</strong>建立 <code>lab_settings</code>：只存研究室的顯示設定（名稱、代碼、聯絡信箱），
-              讓登入畫面在「還沒登入」時也能顯示研究室叫什麼名字。</p>
             <p class="plain-hint">
               另外它開了 RLS（列級權限）——意思是「沒登入的人看不到資料」。
               所以等等驗證時，就算資料表建好了，查詢也會回一個空陣列，這是正常的。
@@ -994,7 +1033,7 @@ update public.lab_settings
         <div class="verify-row">
           <button type="button" class="btn btn-verify" data-verify="schema">驗證資料表建好了沒</button>
           <span class="plain-hint" style="margin:0">
-            我會去你的資料庫問「有沒有一個叫 lab_state 的資料表」。
+            我會去你的資料庫問「六張表都在嗎」、「自動更新那一欄在嗎」。
           </span>
         </div>
 

@@ -127,7 +127,9 @@ const db = await new PGlite();
 
 // Supabase 有、但空的 PostgreSQL 沒有的東西。這些是 Supabase 平台的既有設施，
 // 不是我們的 migration 該負責的部分，所以測試時補上。
-await db.exec(`
+// 抽成常數，因為下面「整份一次跑」的檢查要用一個全新的資料庫，
+// 那一個也要補同樣的東西 —— 兩份貼在一起的程式碼遲早會不一致。
+const SHIMS = `
   create schema if not exists auth;
   create table if not exists auth.users (
     id uuid primary key,
@@ -145,7 +147,9 @@ await db.exec(`
     if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated; end if;
     if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if;
   end $$;
-`);
+`;
+
+await db.exec(SHIMS);
 
 // 001 開頭的 pgcrypto 是 Supabase 內建的擴充，空的 PostgreSQL 沒有。
 // 重跑測試也要用同一套改寫，否則會因為環境差異而不是因為 SQL 本身失敗。
@@ -220,6 +224,29 @@ await check('jsonb_sha256 能算出正確的雜湊', async () => {
   const hash = result.rows[0]?.hash;
   if (!/^[0-9a-f]{64}$/.test(String(hash || ''))) throw new Error(`算出來不是 sha256：${hash}`);
   return String(hash).slice(0, 16) + '…';
+});
+
+// 引導網頁現在叫使用者「整份複製、貼一次、按一次 RUN」。
+// 這句話必須是真的 —— 不然助理照著做會撞到一堆錯誤，而且沒人看得懂。
+//
+// 所以這裡模擬那個動作：把三段串起來，在一個乾淨的資料庫裡一次跑完。
+// 注意這是「全新的資料庫」，不是上面那個已經跑過一輪的。
+await check('整份貼一次、按一次 RUN 就能全部建好（引導網頁就是這樣教的）', async () => {
+  const fresh = await new PGlite();
+  await fresh.exec(SHIMS);
+  try {
+    await fresh.exec(forLocalPostgres(segments.join('\n\n')));
+  } catch (error) {
+    throw new Error(`整份一次跑失敗：${error.message}`);
+  }
+  const created = (await fresh.query(
+    `select count(*)::int as n from pg_tables where schemaname = 'public'`
+  )).rows[0].n;
+  if (created !== EXPECTED_TABLES.length) {
+    throw new Error(`整份跑完只建了 ${created} 張表，預期 ${EXPECTED_TABLES.length} 張`);
+  }
+  await fresh.close();
+  return `${created} 張表一次到位`;
 });
 
 // 研究室很可能把同一段語法貼兩次（不確定跑過了沒，或換瀏覽器重做一次）。
