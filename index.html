@@ -4943,11 +4943,14 @@ td.sticky-col {
 
       const content = {
         environment: {
-          text: '網站執行起來了，但還沒連到資料庫。這通常代表部署時有一步沒完成。',
+          text: '網站執行起來了，但還沒連到資料庫。這代表「網站 → 資料庫」這一段還沒接上。',
           steps: [
-            '回到引導網頁，確認第 4 步（建立 Supabase 資料庫）已完成。',
-            '到 Vercel 專案的 Settings → Environment Variables，確認 <code>SUPABASE_URL</code> 與 <code>SUPABASE_PUBLISHABLE_KEY</code> 這兩個變數都有值。',
-            '如果才剛補上變數，要到 Deployments 按一次 Redeploy 才會生效。',
+            '回到引導網頁第 4 步（建立 Supabase 資料庫），最下面有一段「把這兩個值填進 Vercel」。',
+            '到 Vercel 專案 → Settings → Environment Variables，確認 <code>SUPABASE_URL</code> 與 <code>SUPABASE_PUBLISHABLE_KEY</code> 這兩個變數都有值。'
+              + '引導網頁上有現成的複製按鈕，不用自己打字。',
+            '<strong>填好之後一定要 Redeploy。</strong>環境變數是「部署時」才讀進去的，'
+              + '只加變數不會讓已經在跑的網站知道 —— 這是這個畫面最常見的原因。',
+            '重新部署完，回到引導網頁第 4 步（建立 Supabase 資料庫），按「檢查我的網站連上了沒」確認。',
             '還是不行，把這個網址給維護者，附上你看到的畫面。'
           ]
         },
@@ -4955,8 +4958,9 @@ td.sticky-col {
           text: '資料庫連上了，但資料表還沒建立。',
           steps: [
             '打開 Supabase 後台，左邊選單最下面點 <code>SQL Editor</code>。',
-            '回到引導網頁第 5 步，把畫面上的建表語法複製、貼上、按 RUN。',
-            '畫面上的每一段語法都要執行過（第一段建資料表、第二段建設定、第三段加自動更新開關）。',
+            '回到引導網頁第 5 步，按「複製整份語法」，貼上，按一次 RUN。',
+            '<strong>整份貼一次就好。</strong>語法內部分成三段而且有順序，'
+              + '整份貼讓資料庫自己照順序跑完，比一段一段貼更不容易漏。',
             '執行完回到這個網頁重新整理即可。'
           ]
         }

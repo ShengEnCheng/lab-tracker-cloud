@@ -762,6 +762,62 @@ strong { font-weight: 700; }
    10. 建表語法區塊
    -------------------------------------------------------------------------- */
 
+/* 「填進 Vercel」那張表：一列一個變數，左邊名字、右邊值、最右邊複製。
+   目的是讓使用者「眼睛看著做」——不用回想剛才填了什麼。 */
+.env-table {
+  margin: 14px 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #fff;
+}
+
+.env-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  border-top: 1px solid var(--line);
+}
+
+.env-row:first-child { border-top: 0; }
+
+.env-name {
+  flex: 0 0 auto;
+  min-width: 220px;
+}
+
+.env-name code {
+  font-family: var(--mono);
+  font-size: .84rem;
+  font-weight: 700;
+  background: var(--brand-tint);
+  color: var(--brand-dark);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.env-value {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.env-value code {
+  font-family: var(--mono);
+  font-size: .84rem;
+  color: var(--ink-soft);
+  word-break: break-all;
+}
+
+.env-copy { flex: 0 0 auto; }
+
+@media (max-width: 640px) {
+  .env-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .env-name { min-width: 0; }
+  .env-copy .btn { width: 100%; }
+}
+
 /* 第 4 步的自動偵測面板：把「去後台抄兩個值」變成「按一個按鈕」。
    用 action 色系（不是 info），因為它是一個要按的動作，不是純說明。 */
 .callout--action {

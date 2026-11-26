@@ -923,6 +923,77 @@ update public.lab_settings
 
         <div class="result" data-result="database" hidden></div>
 
+        <!-- 這裡是原本缺掉的一環。
+             引導網頁在瀏覽器裡驗證「我連得到你的資料庫」——但那驗的是
+             「資料庫活著」，不是「你的網站連得到」。網站是靠 Vercel 上的
+             環境變數去連的，而那兩個變數只有使用者自己能填（引導網頁
+             沒有、也不該有改別人 Vercel 設定的權限）。
+             少了這一段，使用者會一路綠燈走到第 5 步，網站卻顯示
+             「還沒連到資料庫」——而且完全不知道為什麼。 -->
+        <div class="callout callout--action" id="dbPushPanel">
+          <h3>最後一哩：把這兩個值填進 Vercel</h3>
+          <p>
+            剛剛驗證的是「你的資料庫活著」。但<strong>你的網站</strong>要靠 Vercel 上的
+            兩個設定值才連得到它，而這兩個值只有你能填（我沒有權限改你的 Vercel 帳號）。
+          </p>
+
+          <div class="env-table" role="table" aria-label="要填進 Vercel 的兩個環境變數">
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_URL</code></div>
+              <div class="env-value" role="cell"><code id="dbEnvUrl">（先在上面填好資料庫網址）</code></div>
+              <div class="env-copy" role="cell">
+                <button type="button" class="btn btn-copy" id="dbEnvUrlCopy"
+                        data-copy="element" data-copy-target="#dbEnvUrl">複製</button>
+              </div>
+            </div>
+            <div class="env-row" role="row">
+              <div class="env-name" role="cell"><code>SUPABASE_PUBLISHABLE_KEY</code></div>
+              <div class="env-value" role="cell"><code id="dbEnvKey">（先在上面填好金鑰）</code></div>
+              <div class="env-copy" role="cell">
+                <button type="button" class="btn btn-copy" id="dbEnvKeyCopy"
+                        data-copy="element" data-copy-target="#dbEnvKey">複製</button>
+              </div>
+            </div>
+          </div>
+
+          <ol class="action-list" style="margin:14px 0 0">
+            <li>
+              打開 Vercel，進到你的專案 → 上方選單 <strong>Settings</strong>
+              → 左邊 <strong>Environment Variables</strong>。
+            </li>
+            <li>
+              把上面兩行各自貼成一個變數：<strong>Name</strong> 貼左邊那串，
+              <strong>Value</strong> 貼右邊那串。兩個都要加。
+              <span class="plain-hint">三個環境（Production / Preview / Development）都勾，或至少勾 Production。</span>
+            </li>
+            <li>
+              存好之後，到 <strong>Deployments</strong> → 最新那次部署右邊的
+              <strong>⋯</strong> → <strong>Redeploy</strong>。
+              <span class="plain-hint">
+                <strong>一定要重新部署。</strong>環境變數是「部署時」讀進去的，
+                只加變數不會讓已經跑起來的網站知道 —— 這是這一題最常見的原因。
+              </span>
+            </li>
+            <li>
+              重新部署完，按下面的按鈕確認。
+            </li>
+          </ol>
+
+          <div class="verify-row">
+            <button type="button" class="btn btn-verify" id="dbVerifySiteBtn">檢查我的網站連上了沒</button>
+            <span class="plain-hint" style="margin:0">
+              我會去問你的網站：「你知道資料庫在哪嗎？」
+            </span>
+          </div>
+
+          <div class="result" id="dbVerifySiteResult" hidden></div>
+
+          <p class="plain-hint" style="margin-top:12px">
+            如果你在部署時是走<strong>官方整合</strong>（按了 Connect 而不是 Skip），
+            這兩個變數通常已經由 Vercel 自動填好了，按上面那個按鈕確認一下就好。
+          </p>
+        </div>
+
         <div class="actions">
           <button type="button" class="btn btn-secondary" data-nav-prev>← 上一步</button>
           <span class="spacer"></span>

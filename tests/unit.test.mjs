@@ -567,6 +567,60 @@ test('wizard：從網站自動抓資料庫連線資訊', async (t) => {
   });
 });
 
+test('wizard：檢查「網站 → 資料庫」這一段（不是資料庫本身）', async (t) => {
+  // 這是使用者實際撞到的情況：資料庫完全正常、引導網頁第 4 步也驗過了，
+  // 但網站顯示「還沒連到資料庫」。原因是網站連資料庫靠的是 Vercel 上的
+  // 環境變數，而那一段沒有任何人在驗。
+  const { checkSiteBackend } = wizard;
+  const realFetch = globalThis.fetch;
+  const stub = handler => { globalThis.fetch = async (url, o) => handler(String(url), o); };
+
+  t.afterEach(() => { globalThis.fetch = realFetch; });
+  t.after(() => { globalThis.fetch = realFetch; });
+
+  await t.test('網站沒連上資料庫 → 要指出「沒重新部署」這個最常見原因', async () => {
+    stub(() => ({
+      ok: true, status: 200,
+      json: async () => ({
+        backendConfigured: false, setupComplete: false,
+        checks: { environment: { ok: false, message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。' } }
+      })
+    }));
+    const r = await checkSiteBackend('https://lab.example.com');
+    assert.equal(r.tone, 'error');
+    assert.match(r.message, /環境變數/);
+    // 只說「沒設定」不夠，要講「只加變數不會生效」
+    assert.match(r.message, /Redeploy|重新部署/);
+  });
+
+  await t.test('網站連上了 → 綠燈，並說往下一步走', async () => {
+    stub(() => ({ ok: true, status: 200, json: async () => ({ backendConfigured: true, setupComplete: false }) }));
+    const r = await checkSiteBackend('https://lab.example.com');
+    assert.equal(r.tone, 'ok');
+    assert.match(r.message, /下一步/);
+  });
+
+  await t.test('網站設定都完成了 → 提示可以直接跳後面', async () => {
+    stub(() => ({ ok: true, status: 200, json: async () => ({ backendConfigured: true, setupComplete: true }) }));
+    const r = await checkSiteBackend('https://lab.example.com');
+    assert.equal(r.tone, 'ok');
+    assert.match(r.message, /第 7 步/);
+  });
+
+  await t.test('不是這套系統的網址 → 要講清楚，不要含糊', async () => {
+    stub(() => ({ ok: false, status: 404, json: async () => ({}) }));
+    const r = await checkSiteBackend('https://lab.example.com');
+    assert.equal(r.tone, 'error');
+    assert.match(r.message, /不是這套系統|找不到/);
+  });
+
+  await t.test('連不上 → 不確定，給「直接打開網站看」的備案', async () => {
+    stub(() => { throw new TypeError('Failed to fetch'); });
+    const r = await checkSiteBackend('https://lab.example.com');
+    assert.equal(r.tone, 'warn');
+  });
+});
+
 test('wizard：步驟判定', async (t) => {
   await t.test('前面步驟沒過會提醒', () => {
     const result = wizard.getStepPrerequisite('done', {});

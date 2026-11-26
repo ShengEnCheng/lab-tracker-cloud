@@ -66,6 +66,23 @@ function report() {
   check('說明文字有提到資料庫', () => ($('setupBlockedMessage')?.textContent || '').includes('資料庫'));
   check('給了具體的解決步驟', () => document.querySelectorAll('#setupBlockedSteps li').length >= 3);
   check('步驟有提到 Vercel 環境變數', () => ($('setupBlockedSteps')?.textContent || '').includes('Environment Variables'));
+  // 使用者實際撞到的情況：看到「還沒連到資料庫」，照著做卻還是壞的。
+  // 原因是他加了變數但沒重新部署 —— 而原本的說明只是輕輕帶過。
+  check('有強調「填好之後一定要 Redeploy」', () => {
+    const text = $('setupBlockedSteps')?.textContent || '';
+    return /一定要 Redeploy|必須 Redeploy|一定要重新部署/.test(text);
+  });
+  check('有解釋「為什麼」要重新部署（部署時才讀進去）', () => {
+    const text = $('setupBlockedSteps')?.textContent || '';
+    return /部署時.{0,6}讀|只加變數不會/.test(text);
+  });
+  check('有指引使用者回引導網頁第 4 步的「填進 Vercel」那一段', () => {
+    const text = $('setupBlockedSteps')?.textContent || '';
+    // 這個畫面上的人剛好卡在「不知道去哪拿那兩個值」。
+    // 引導網頁第 4 步有現成的複製按鈕，所以一定要把他指回那一小段，
+    // 而不是只說「回去第 4 步」—— 第 4 步資訊很多，他會再迷路一次。
+    return /第 4 步[^。]{0,40}把這兩個值填進 Vercel/.test(text);
+  });
 
   // --- 表單欄位齊全 ---
   check('研究室名稱欄位存在', () => !!$('setupOrgName'));

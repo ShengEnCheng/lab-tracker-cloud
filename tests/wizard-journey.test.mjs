@@ -239,6 +239,29 @@ async function journey() {
     const text = document.getElementById('panel-schema').textContent;
     return /不會有任何錯誤訊息|沒有任何錯誤訊息/.test(text);
   });
+  // 使用者實際撞到的情況：網站架起來了，首頁卻說「還沒連到資料庫」，
+  // 而他完全不知道為什麼 —— 因為引導網頁從來沒告訴他要填 Vercel 環境變數。
+  check('第 4 步有「把值填進 Vercel」這一段', () => {
+    return Boolean(document.getElementById('dbPushPanel'));
+  });
+  check('第 4 步寫出兩個環境變數的完整名稱', () => {
+    const text = document.getElementById('dbPushPanel')?.textContent || '';
+    return text.includes('SUPABASE_URL') && text.includes('SUPABASE_PUBLISHABLE_KEY');
+  });
+  check('第 4 步有講「一定要重新部署」（不然填了也不會生效）', () => {
+    const text = document.getElementById('dbPushPanel')?.textContent || '';
+    // 只出現「重新部署」四個字不夠 —— 這句話的重點是「一定要」。
+    // 少了那個強調，使用者很容易讀成「可以重新部署」然後就跳過了。
+    return /一定要重新部署|必須重新部署/.test(text);
+  });
+  check('第 4 步有解釋「為什麼」一定要重新部署', () => {
+    const text = document.getElementById('dbPushPanel')?.textContent || '';
+    // 講「部署時才讀進去」使用者才會信服；只說「要重新部署」會被當成官腔。
+    return /部署時.{0,6}讀|才會生效/.test(text);
+  });
+  check('第 4 步有「檢查我的網站連上了沒」按鈕', () => {
+    return Boolean(document.getElementById('dbVerifySiteBtn'));
+  });
   check('第 4 步有「自動偵測我的資料庫」按鈕', () => {
     return Boolean(document.getElementById('dbAutoDetectBtn'));
   });

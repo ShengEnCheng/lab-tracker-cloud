@@ -952,6 +952,7 @@ function main() {
   bindCopyButtons(elements, doc);
   bindVerifyButtons(elements, state);
   bindDatabaseAutoDetect(elements, state);
+  bindSiteBackendCheck(elements, state);
 
   renderMigrationSql(elements, doc);
   renderDeploySection(elements);
@@ -989,7 +990,11 @@ function collectElements(doc) {
     dbAutoDetectBtn: doc.getElementById('dbAutoDetectBtn'),
     dbAutoNote: doc.getElementById('dbAutoNote'),
     dbAutoResult: doc.getElementById('dbAutoResult'),
-    dbManualTitle: doc.getElementById('dbManualTitle')
+    dbManualTitle: doc.getElementById('dbManualTitle'),
+    dbEnvUrl: doc.getElementById('dbEnvUrl'),
+    dbEnvKey: doc.getElementById('dbEnvKey'),
+    dbVerifySiteBtn: doc.getElementById('dbVerifySiteBtn'),
+    dbVerifySiteResult: doc.getElementById('dbVerifySiteResult')
   };
 }
 
@@ -1267,6 +1272,28 @@ function updateNavChecks(elements, state) {
 function syncDynamicText(elements, state) {
   // 側邊欄與其他用「目前值」組字的地方（之後要加可以放這裡）
   const siteUrl = normalizeSiteUrl(state.siteUrl);
+  // 第 4 步「填進 Vercel」那張表：直接顯示使用者自己填的值，
+  // 讓他可以整段複製，不用回頭找、也不用重打字。
+  if (elements.dbEnvUrl) {
+    const value = normalizeSupabaseUrl(state.supabaseUrl);
+    elements.dbEnvUrl.textContent = value || '（先在上面填好資料庫網址）';
+    if (value) elements.dbEnvUrl.dataset.raw = value;
+    else delete elements.dbEnvUrl.dataset.raw;
+  }
+  if (elements.dbEnvKey) {
+    const value = String(state.publishableKey || '').trim();
+    // 金鑰很長，整串顯示會把版面撐壞；只顯示頭尾，複製時仍是完整值。
+    if (value) {
+      elements.dbEnvKey.textContent = value.length > 24
+        ? `${value.slice(0, 14)}…${value.slice(-6)}`
+        : value;
+      elements.dbEnvKey.dataset.raw = value;
+    } else {
+      elements.dbEnvKey.textContent = '（先在上面填好金鑰）';
+      delete elements.dbEnvKey.dataset.raw;
+    }
+  }
+
   if (elements.doneSiteUrlHint) {
     // 第 7 步說明自動更新的那張卡片要顯示使用者自己的網址，
     // 否則他得回去前面找 —— 而這裡正是他準備去設定 GitHub 變數的時候。
@@ -1875,6 +1902,108 @@ function renderDbAutoResult(elements, tone, html, reason) {
       ? '已填好，不用再到 Supabase 後台抄。'
       : '沒關係，照下面的步驟自己填也可以。';
   }
+}
+
+// 「檢查我的網站連上了沒」。
+//
+// 為什麼要單獨一個按鈕：第 4 步原本的「驗證連線」驗的是
+// 「引導網頁 → 你的資料庫」，證明資料庫活著。
+// 但真正會壞的是另一段：**你的網站 → 你的資料庫**，中間靠的是 Vercel 上的
+// 環境變數。環境變數沒填、或填了但沒重新部署，資料庫本身完全正常，
+// 網站卻會顯示「還沒連到資料庫」——使用者只會覺得莫名其妙。
+//
+// 所以這裡直接問網站後端：「你知道資料庫在哪嗎？」
+function bindSiteBackendCheck(elements, state) {
+  const button = elements.dbVerifySiteBtn;
+  if (!button) return;
+
+  button.addEventListener('click', async () => {
+    if (button.disabled) return;
+    setBusy(button, true);
+
+    const box = elements.dbVerifySiteResult;
+    const show = (tone, html) => {
+      if (!box) return;
+      box.hidden = false;
+      box.dataset.tone = tone;
+      box.innerHTML = html;
+    };
+    show('info', '正在問你的網站…');
+
+    let outcome;
+    try {
+      outcome = await checkSiteBackend(state.siteUrl);
+    } catch (error) {
+      outcome = { tone: 'error', message: `檢查時發生意外狀況：${error && error.message ? error.message : '未知錯誤'}` };
+    } finally {
+      setBusy(button, false);
+    }
+
+    show(outcome.tone, outcome.message);
+  });
+}
+
+export async function checkSiteBackend(siteUrl) {
+  const base = normalizeSiteUrl(siteUrl);
+  if (!base) {
+    return { tone: 'error', message: '還不知道你的網站網址。請先回第 3 步填好，這個檢查才有意義。' };
+  }
+
+  let response;
+  try {
+    response = await fetchWithTimeout(`${base}/api/setup-status`, {
+      headers: { accept: 'application/json' }
+    });
+  } catch {
+    return {
+      tone: 'warn',
+      message: '連不到你的網站（可能是跨網域限制或網路）。'
+        + '最快的方法是直接打開你的網站看看：如果還是「還沒連到資料庫」，就是環境變數那一步還沒完成。'
+    };
+  }
+
+  if (response.status === 404) {
+    return { tone: 'error', message: '這個網址看起來不是這套系統（找不到 /api/setup-status）。請確認第 3 步貼的是正確的網址。' };
+  }
+  if (!response.ok) {
+    return { tone: 'warn', message: `你的網站回了 HTTP ${response.status}，我不確定這是什麼狀況。請稍後再試一次。` };
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    return { tone: 'warn', message: '你的網站回了看不懂的內容。' };
+  }
+
+  // 已經設定完成 → 後面幾步其實都做過了
+  if (payload && payload.setupComplete) {
+    return {
+      tone: 'ok',
+      message: '你的網站已經連上資料庫，而且初始設定也完成了。'
+        + '這一步（以及後面的建表、建立帳號）你之前應該已經做過，可以直接跳到第 7 步。'
+    };
+  }
+
+  if (payload && payload.backendConfigured) {
+    return {
+      tone: 'ok',
+      message: '連上了！你的網站已經知道資料庫在哪。'
+        + '接著往下一步（建立資料表）繼續就好。'
+    };
+  }
+
+  // 這裡就是使用者實際撞到的情況。
+  const detail = payload && payload.checks && payload.checks.environment
+    ? String(payload.checks.environment.message || '')
+    : '';
+  return {
+    tone: 'error',
+    message: `${escapeHtml(detail || '你的網站還沒連上資料庫。')}<br>`
+      + '代表上面那兩個環境變數<strong>還沒填、或填了但沒有重新部署</strong>。'
+      + '環境變數是「部署時」才讀進去的，只加變數不會讓已經跑起來的網站知道。'
+      + '請照上面第 3 個動作按一次 Redeploy，再回來按這個按鈕。'
+  };
 }
 
 async function verifyDatabase(state) {
