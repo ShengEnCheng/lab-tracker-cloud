@@ -702,7 +702,25 @@ update public.lab_settings
           <p>
             先看它寫什麼。最常見的是「這個專案名稱已經有人用了」——換一個名字就好
             （例如加上你的研究室縮寫或今天的日期）。
-            如果完全看不懂，把畫面截圖，第 7 步有寫可以找誰。
+          </p>
+          <p style="margin-top:10px">
+            <strong>如果看到「No Supabase organizations found」：</strong>
+            這是說你的 Supabase 帳號還太新，裡面一個「組織（organization）」都還沒有。
+            按下面的字建立一個就好（大約 30 秒），然後再回來按一次部署：
+          </p>
+          <p style="margin-top:8px">
+            <a href="https://supabase.com/dashboard/new" target="_blank" rel="noopener noreferrer">
+              → 去 Supabase 建立組織（會開新分頁）
+            </a>
+          </p>
+          <p class="plain-hint" style="margin-top:8px">
+            組織只是「把專案放在一起的資料夾」，免費方案就夠用，不會收錢。
+            名稱隨便取（例如研究室的名字），建好之後回來按 F5 重新整理，再按一次一鍵部署。
+          </p>
+          <p class="plain-hint" style="margin-top:8px">
+            老實說：<strong>就算完全跳過資料庫那一步，網站也會架起來</strong>，
+            只是首頁會顯示「還沒連上資料庫」。你可以先按完成，之後從第 4 步
+            單獨把 Supabase 接上去（第 4 步有寫怎麼補）。
           </p>
         </div>
 
@@ -777,6 +795,10 @@ update public.lab_settings
             沒關係，還是可以補：到 Vercel 的專案頁面 → 上方選單
             <strong>Storage</strong>（或 Integrations）→ 找到 <strong>Supabase</strong> → 按 Connect。
             之後的流程跟下面一樣。
+          </p>
+          <p class="plain-hint" style="margin-top:8px">
+            部署時按了「Skip」也很正常——尤其是第一次用 Supabase 的人。
+            補連結大約 2 分鐘，比卡在部署畫面快。
           </p>
         </div>
 

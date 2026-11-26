@@ -202,9 +202,9 @@ npm run test:update-policy # 24 項：研究室在介面上關掉自動更新，
 npm run test:settings-ui  # 51 項：那顆開關在畫面上真的看得到、按得動、失敗會撥回去
 npm run test:checkup      # 33 項：使用者每天要做的事，逐一真的做一遍
 npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
-npm run test:journey      # 35 項：引導網頁從第 1 步真的走到第 7 步
+npm run test:journey      # 39 項：引導網頁從第 1 步真的走到第 7 步
 npm run test:ui           # 38 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（550 項）
+npm run test:all          # 全部（554 項）
 ```
 
 ### 十三支測試各負責哪一段
@@ -304,10 +304,11 @@ npm install --no-save @electric-sql/pglite   # 只在驗證時裝，不進版控
 npm run verify:sql
 ```
 
-它會把**引導網頁裡助理實際會貼上的那兩段 SQL** 丟進一個真的 PostgreSQL
+它會把**引導網頁裡助理實際會貼上的那幾段 SQL** 丟進一個真的 PostgreSQL
 （PGlite，編譯成 WebAssembly，不必安裝資料庫）執行，然後確認：
 
-- 兩段語法與 `supabase/migrations/` 逐字相同（樣板字串會把 `$$` 吃成 `$`）
+- 每一段語法都與 `supabase/migrations/` 逐字相同（樣板字串會把 `$$` 吃成 `$`）
+- 每一段重跑一次也不會報錯（助理很可能不確定跑過沒就再貼一次）
 - 真的跑得起來（不是「看起來有內容」而已）
 - 六張表都建立、每一張都開了 RLS
 - `lab_settings` **沒有** insert 政策（第一列只能由伺服器金鑰建立）
@@ -688,10 +689,10 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（550 項）
+- [ ] `npm run test:all` 全綠（554 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
-- [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那兩段
+- [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那幾段
       （`node wizard/sync-inline.mjs --check` 會逐字比對，也會驗證 `$$` 沒有被吃掉）
 - [ ] 改過 SQL 之後另外跑一次 `npm run verify:sql`
       （要先用 `npm install --no-save @electric-sql/pglite`；它會把 SQL 丟進真的

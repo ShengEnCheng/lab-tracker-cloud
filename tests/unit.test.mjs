@@ -454,6 +454,11 @@ test('wizard：Deploy Button 網址', async (t) => {
     assert.match(url, /project-name=lab-tracker/);
     assert.match(url, /repository-name=lab-tracker/);
     assert.match(url, /integration-ids=oac_TEST/);
+    // 整合必須是「可以跳過」的。不能跳過的話，全新的 Supabase 帳號
+    // （一個 organization 都沒有）會卡在
+    //   「No Supabase organizations found」
+    // 那個畫面動彈不得，而且完全看不懂要幹嘛。
+    assert.match(url, /skippable-integrations=1/);
   });
 
   await t.test('專案名稱會被清理成合法 slug', () => {

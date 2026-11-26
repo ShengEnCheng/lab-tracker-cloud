@@ -102,9 +102,25 @@ export function buildDeployUrl({ repoUrl, projectName, repositoryName, integrati
 
   const integration = typeof integrationId === 'string' ? integrationId.trim() : '';
   if (integration) {
-    // integration-ids 是「必要的整合」。帶了這個參數，Vercel 會在部署流程中
-    // 要求使用者連接 Supabase（這就是步驟 3 說的官方整合）。
+    // integration-ids 是「Vercel 會要求你安裝的整合」。
+    // 帶了它，部署流程才會問你要不要建資料庫（第 4 步）。
     params.set('integration-ids', integration);
+
+    // 但**不能讓它變成硬性關卡**。
+    //
+    // 實際踩到的情況：全新的 Supabase 帳號按下一鍵部署，Vercel 回
+    //   「No Supabase organizations found
+    //    Create a Supabase organization before installing the Vercel integration.」
+    // 然後就卡住了 —— 不能繼續部署、也不知道「organization」是什麼。
+    // Vercel 文件寫得很清楚：帶了 integration-ids，那個整合就是
+    // 「required to be added before the Project can be imported」。
+    //
+    // 加上 skippable-integrations 之後，使用者可以選擇「現在不接資料庫，
+    // 之後再接」。網站會先部署起來，首頁顯示「還沒連上資料庫」，
+    // 第 4 步再帶他把 Supabase 接上去。
+    //
+    // 寧可多幾個手動步驟，也不要讓人卡在一個看不懂的紅字前面動彈不得。
+    params.set('skippable-integrations', '1');
   }
 
   // external-id 只是給 Vercel 後台統計「這個部署從哪裡來的」，不影響功能。

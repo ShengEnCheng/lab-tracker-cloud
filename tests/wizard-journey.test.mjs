@@ -15,6 +15,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync, rmSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -170,6 +171,28 @@ async function journey() {
   check('第 3 步有「一鍵部署」按鈕', () => Boolean($('#deployLink')));
   check('一鍵部署的網址指向 Vercel', () => String($('#deployLink')?.href || '').includes('vercel.com/new'));
   check('一鍵部署網址帶了 repository-url', () => String($('#deployLink')?.href || '').includes('repository-url='));
+
+  // 這一條是實際踩到的死路：全新的 Supabase 帳號按下一鍵部署，Vercel 回
+  //   「No Supabase organizations found
+  //    Create a Supabase organization before installing the Vercel integration.」
+  // 然後就卡住了。原因是 integration-ids 會讓那個整合變成「必要」——
+  // Vercel 文件：「required to be added before the Project can be imported」。
+  check('一鍵部署的資料庫整合是「可以跳過」的（不然新帳號會卡死）', () => {
+    const href = String($('#deployLink')?.href || '');
+    return href.includes('skippable-integrations=1');
+  });
+  check('第 3 步有寫「No Supabase organizations found」該怎麼辦', () => {
+    const text = $('#panel-deploy')?.textContent || '';
+    return text.includes('No Supabase organizations found');
+  });
+  check('第 3 步給的是可以直接點的建立組織連結', () => {
+    const link = $('#panel-deploy a[href*="supabase.com/dashboard"]');
+    return Boolean(link);
+  });
+  check('第 3 步有說「跳過資料庫網站也會架起來」（不要讓人以為非做不可）', () => {
+    const text = $('#panel-deploy')?.textContent || '';
+    return /跳過[^。]{0,20}(也會|還是|網站會)/.test(text) || /就算[^。]{0,10}跳過/.test(text);
+  });
 
   await fillField('siteUrl', SITE);
   await clickVerify('deploy');
@@ -336,6 +359,39 @@ const html = readFileSync(WIZARD_PATH, 'utf8');
 
 // 把整頁跑一次，回傳瀏覽器裡跑出來的结果。
 // 同一個 harness、只差一個注入的旗標，所以兩個情境測的是同一份程式碼。
+// file:// 模式下，頁面載入的是 inline-bundle.js（預先內嵌的同一份程式），
+// 不是 wizard.js。忘記跑 sync-inline 的話，這裡驗的就是舊程式 ——
+// 明明把功能改壞了，測試照樣全綠。變異測試時真的被騙過一次
+// （拿掉 skippable-integrations，這支測試仍然 39 項全過）。
+//
+// 所以先驗指紋。這個指紋是 sync-inline.mjs 自己算的
+// （config.js + wizard.js 的 sha256 前 12 碼），跟 `npm run check:wizard`
+// 用的是同一個值 —— 不自己另創一套比對邏輯，免得兩邊標準不一致。
+function assertBundleFresh() {
+  const bundle = readFileSync(join(wizardDir, 'inline-bundle.js'), 'utf8');
+  const config = readFileSync(join(wizardDir, 'config.js'), 'utf8');
+  const wizard = readFileSync(join(wizardDir, 'wizard.js'), 'utf8');
+
+  const match = bundle.match(/var payload = (\{[\s\S]*?\});\n/);
+  if (!match) {
+    throw new Error('inline-bundle.js 讀不出指紋，可能格式壞了。請跑 node wizard/sync-inline.mjs');
+  }
+  let embedded;
+  try {
+    embedded = JSON.parse(match[1]).fingerprint;
+  } catch (error) {
+    throw new Error(`inline-bundle.js 的內容解析失敗：${error.message}`);
+  }
+
+  const expected = createHash('sha256').update(config + '\n' + wizard).digest('hex').slice(0, 12);
+  if (embedded !== expected) {
+    throw new Error(
+      `inline-bundle.js 過期了（檔案內是 ${embedded}，原始碼算出來是 ${expected}）。`
+      + '請先跑 node wizard/sync-inline.mjs，否則這個測試驗的是舊程式。'
+    );
+  }
+}
+
 function runPage({ missingColumn }) {
   const pagePath = join(wizardDir, missingColumn ? '.journey-test-b.html' : '.journey-test.html');
   const flag = `<script>window.__missingColumn = ${missingColumn ? 'true' : 'false'};<\/script>`;
@@ -378,6 +434,14 @@ function report(title, payload) {
     for (const error of payload.errors) console.log(`  ${error}`);
   }
   console.log(`（過程中發出的網路請求：${payload.requestCount} 次）`);
+}
+
+try {
+  assertBundleFresh();
+  console.log('✔ inline-bundle.js 與 wizard.js 同步（否則下面驗的是舊程式）');
+} catch (error) {
+  console.log(`✗ ${error.message}`);
+  process.exit(1);
 }
 
 report('引導網頁：從第 1 步走到第 7 步', runPage({ missingColumn: false }));
