@@ -404,6 +404,51 @@ export const TEMPLATE = {
 重新產生 `inline-bundle.js`，否則 `file://` 開的那份還是舊的
 （`npm run check:wizard` 會檢查這件事）。
 
+### ⚠️ 獨立的 Vercel 專案一定要把 Root Directory 設成 wizard
+
+`https://wizard-black.vercel.app` 是一個**獨立的** Vercel 專案（專案名稱
+`wizard`），跟主系統的 `lab-tracker-cloud` 不是同一個。
+
+它連著同一個 GitHub repo，所以 **push 到 main 就會自動部署**。
+但它的 Root Directory 如果留在預設的 `.`，Vercel 會從 repo 根目錄部署 ——
+於是把**主系統**（`index.html`）當成引導網頁端出去。
+
+實際發生過：合併一個 PR 之後，`wizard-black.vercel.app` 的首頁變成
+「研究室追蹤系統」（232KB 的主系統），引導網頁不見了，而且**五張截圖全部 404**。
+它不是壞掉，是「跑錯程式」。
+
+修法（擇一）：
+
+- Dashboard → 專案 `wizard` → Settings → **Root Directory** 填 `wizard` → 存檔 → Redeploy
+- 或 API：
+  ```bash
+  curl -X PATCH     "https://api.vercel.com/v9/projects/prj_8yu4iSKQbmH0rdvVi6zd5YxlgNdn?teamId=team_S7tR6qTFRFJdPAapjRf8AkCM"     -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json'     -d '{"rootDirectory":"wizard"}'
+  ```
+
+**改完之後，CLI 部署要改從 repo 根目錄跑**（Vercel 會自己進去 `wizard/`）：
+
+```bash
+cd /Volumes/MACRAID/projects/lab-tracker-cloud
+npx vercel deploy --prod --yes --project wizard
+```
+
+從 `wizard/` 裡面跑會得到
+`Error: The specified Root Directory "wizard" does not exist.` ——
+因為它會上傳 `wizard/` 當根，然後在裡面找 `wizard/wizard/`。
+
+**上線後怎麼確認**（30 秒）：
+
+```bash
+# 大小：引導網頁 ~79KB，主系統 ~232KB。差很多，一眼就看得出來
+curl -s https://wizard-black.vercel.app/ | wc -c
+# 標題：要是「研究室系統上線引導」，不是「研究室追蹤系統」
+curl -s https://wizard-black.vercel.app/ | grep -o '<title>[^<]*</title>'
+# 截圖：五張都要 200
+for f in supabase-project-url supabase-api-keys supabase-sql-editor vercel-clone vercel-domain; do
+  curl -s -o /dev/null -w "$f %{http_code}\n" "https://wizard-black.vercel.app/img/$f.png"
+done
+```
+
 ### 為什麼引導網頁需要 CORS
 
 引導網頁跑在別的網域（可能是 `file://`，也可能是 Pages），
