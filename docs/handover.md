@@ -200,7 +200,7 @@ npm run test:checkup      # 33 項：使用者每天要做的事，逐一真的�
 npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
 npm run test:journey      # 25 項：引導網頁從第 1 步真的走到第 7 步
 npm run test:ui           # 38 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（421 項）
+npm run test:all          # 全部（423 項）
 ```
 
 ### 九支測試各負責哪一段
@@ -482,7 +482,7 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（369 項）
+- [ ] `npm run test:all` 全綠（423 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
 - [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那兩段

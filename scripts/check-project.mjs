@@ -335,6 +335,75 @@ check('repoUrl 不是預設值（或已知它需要更換）', () => {
   return true;
 });
 
+// 使用者可見的「第 N 步」必須跟引導網頁的編號一致。
+//
+// 為什麼要專門測這個：api/setup-status.js 與 api/setup.js 是照「規格書的
+// 0～6 編號」寫的，但引導網頁畫面上顯示的是「第 1～7 步」，兩邊差一號。
+// 於是錯誤訊息會叫使用者「回第 3 步建立資料庫」——但資料庫其實在第 4 步，
+// 第 3 步是「複製程式碼並部署」。使用者照著點會跳到完全不相關的頁面，
+// 而且他不會知道自己被指錯了，只會覺得「這份說明在騙人」。
+//
+// 這裡把「引導網頁第 N 步」這句話抓出來，比對 STEPS 的實際編號。
+//
+// 文件（docs/installation.md）也要掃：助理一手拿文件、一手點引導網頁，
+// 文件寫錯同樣會把他帶到錯的步驟，而且他更難自己發現。
+check('使用者可見的「引導網頁第 N 步」沒有差一號', () => {
+  // 引導網頁的步驟編號（順序＝畫面上的 1、2、3…）
+  const steps = [
+    { id: 'start', label: '開始之前' },
+    { id: 'github', label: '建立 GitHub 帳號' },
+    { id: 'deploy', label: '複製程式碼並部署' },
+    { id: 'database', label: '建立資料庫' },
+    { id: 'schema', label: '建立資料表' },
+    { id: 'admin', label: '建立管理員帳號' },
+    { id: 'done', label: '完成了' }
+  ];
+
+  // 這些關鍵字出現在「第 N 步」附近時，用來判斷那句話指的是哪一個步驟。
+  // 用語意而不是數字，才能抓出「數字寫錯」。
+  const keywordToStep = [
+    // 網址指涉：文件裡常用「點引導網頁第 N 步的連結（<https://…>）」，
+    // 那個網址本身就決定了是哪一步，比文字更可靠。
+    { step: 'github', pattern: /github\.com\/signup/i },
+    { step: 'database', pattern: /supabase\.com\/dashboard/i },
+    { step: 'database', pattern: /Supabase\s*資料庫|建立資料庫|連到資料庫|資料庫的連線|金鑰填好/ },
+    { step: 'schema', pattern: /建表語法|資料表|SQL Editor|複製第一段|複製第二段/ },
+    { step: 'deploy', pattern: /Deploy to Vercel|複製程式碼|部署|Vercel/ },
+    { step: 'admin', pattern: /管理員帳號|第一次使用/ }
+  ];
+
+  const sources = ['index.html', 'api/setup-status.js', 'api/setup.js', 'docs/installation.md'];
+  const problems = [];
+
+  for (const file of sources) {
+    const text = read(file);
+    const lines = text.split('\n');
+    lines.forEach((line, index) => {
+      // 只找「引導網頁第 N 步」這種明確指向引導網頁的句子。
+      // 一般程式註解或別的「第 N 步」不算。
+      const mention = line.match(/引導網頁[^'"]{0,12}?第\s*(\d+)\s*步/);
+      if (!mention) return;
+      const claimed = Number(mention[1]);
+
+      // 這句話在講哪個步驟？看同一行有沒有語意關鍵字。
+      const matched = keywordToStep.find(entry => entry.pattern.test(line));
+      if (!matched) return;
+
+      const actualNumber = steps.findIndex(step => step.id === matched.step) + 1;
+      if (actualNumber <= 0) return;
+      if (claimed === actualNumber) return;
+
+      problems.push(
+        `${file}:${index + 1} 說「第 ${claimed} 步」是「${steps[actualNumber - 1].label}」，`
+        + `但引導網頁上那是第 ${actualNumber} 步`
+      );
+    });
+  }
+
+  if (problems.length) throw new Error(problems.join('；'));
+  return true;
+});
+
 // ---------------------------------------------------------------------------
 console.log('');
 if (failures.length) {

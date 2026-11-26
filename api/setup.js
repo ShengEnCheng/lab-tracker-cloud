@@ -121,7 +121,7 @@ async function handleSetup(req, res) {
     if (text.includes('PGRST205')) {
       return sendJson(res, 503, {
         error: 'schema_missing',
-        message: '資料表還沒建立。請先到 Supabase 的 SQL Editor 執行建表語法（引導網頁第 4 步），再回來設定。'
+        message: '資料表還沒建立。請先到 Supabase 的 SQL Editor 執行建表語法（引導網頁第 5 步），再回來設定。'
       });
     }
   }

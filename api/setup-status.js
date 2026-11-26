@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       checks: {
         environment: {
           ok: false,
-          message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。如果你是照引導網頁做的，請先完成第 3 步。'
+          message: '這個網站還沒有連到資料庫（Supabase 環境變數沒設定）。如果你是照引導網頁做的，請先完成第 4 步。'
         }
       }
     });
@@ -146,8 +146,8 @@ export default async function handler(req, res) {
         schema: {
           ok: false,
           message: missing.includes('lab_settings') && probes.some(p => p.name === 'lab_state' && p.exists)
-            ? '主要資料表已經建好，但還缺第二段設定語法（002）。請回到引導網頁第 4 步，把第二段也貼進 SQL Editor 執行。'
-            : '資料表還沒建立。請回到引導網頁第 4 步，把語法貼進 Supabase 的 SQL Editor 執行。',
+            ? '主要資料表已經建好，但還缺第二段設定語法（002）。請回到引導網頁第 5 步，把第二段也貼進 SQL Editor 執行。'
+            : '資料表還沒建立。請回到引導網頁第 5 步，把語法貼進 Supabase 的 SQL Editor 執行。',
           missing
         }
       }

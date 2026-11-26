@@ -62,7 +62,7 @@ GitHub 是放程式碼的地方。你的研究室會有自己的一份副本。
 
 ### 做什麼
 
-1. 點引導網頁第 1 步的連結（<https://github.com/signup>）
+1. 點引導網頁第 2 步的連結（<https://github.com/signup>）
 2. 用**研究室的 Email** 註冊
 3. 設定密碼、驗證 Email
 
@@ -84,7 +84,7 @@ Supabase 是放資料的地方。你們的個案資料、成員名單都存在�
 
 ### 做什麼
 
-1. 點引導網頁第 2 步的連結（<https://supabase.com/dashboard/sign-up>）
+1. 點引導網頁第 4 步的連結（<https://supabase.com/dashboard/sign-up>）
 2. **用同一個 GitHub 帳號登入**（最快的方式）
 3. 按 **New project**
 4. 填寫：
@@ -113,7 +113,7 @@ Supabase 是放資料的地方。你們的個案資料、成員名單都存在�
 
 1. 在 Supabase 後台，左側選單最下方點 **SQL Editor**
 2. 點 **New query**
-3. 回到引導網頁第 3 步，按「複製第一段」
+3. 回到引導網頁第 5 步，按「複製第一段」
 4. 貼到 Supabase 的編輯器裡，按右下角的 **Run**（或 `Ctrl/Cmd + Enter`）
 5. 看到 `Success. No rows returned` 就是成功
 6. **點 New query 再開一個新的**，按「複製第二段」，貼上，按 **Run**
@@ -143,7 +143,7 @@ Vercel 負責把網站跑起來，讓別人可以連進來。
 
 ### 做什麼
 
-1. 點引導網頁第 4 步的按鈕（**Deploy to Vercel**）
+1. 點引導網頁第 3 步的按鈕（**Deploy to Vercel**）
 2. 用**同一個 GitHub 帳號**登入 Vercel
 3. 第一次用會要求授權 Vercel 讀取你的 GitHub —— 按 **Authorize**
 4. 填寫專案名稱（例如 `cog-neuro-lab`），按 **Create**
