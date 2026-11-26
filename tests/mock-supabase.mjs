@@ -44,7 +44,18 @@ function pick(rows, select) {
   });
 }
 
-export async function startMockSupabase({ tables = null } = {}) {
+// 伺服器金鑰有沒有生效（照真實 Supabase 的行為）：
+//   新制 sb_secret_…：放在 apikey 就生效。
+//   舊制 service_role（eyJ… 的 JWT）：角色寫在 token 裡，**一定要放進 Authorization**。
+//     只放 apikey 會被當成匿名 —— RLS 擋光、回 200 + []，不報錯。
+// 不模擬這件事，「舊制金鑰只放 apikey」的程式在測試裡會一路綠燈，上線才壞。
+function serverKeyAccepted(serverKey, apikey, bearer) {
+  if (!serverKey) return false;
+  if (serverKey.startsWith('eyJ')) return bearer === serverKey;
+  return apikey === serverKey || bearer === serverKey;
+}
+
+export async function startMockSupabase({ tables = null, secretKey = null } = {}) {
   const state = {
     authUsers: [],
     // 預設模擬「資料表都已建立」的狀態
@@ -60,7 +71,7 @@ export async function startMockSupabase({ tables = null } = {}) {
     // 用來模擬「資料庫被暫停」
     down: false,
     // 伺服器金鑰（模擬 secret / service_role）：帶著它就能繞過 RLS
-    secretKey: 'sb_secret_test_key',
+    secretKey: secretKey || 'sb_secret_test_key',
     // 已登入使用者的有效 token。真實 Supabase 由 JWT 簽章驗證；
     // 這裡用白名單模擬「只有真的登入過的人才有有效 token」。
     authTokens: []
@@ -195,7 +206,7 @@ export async function startMockSupabase({ tables = null } = {}) {
       // 3. 帶了 Authorization 卻不是有效 token → 401 Invalid JWT
       //    （真實 Supabase 對假 token 就是這樣回）
       const serverKey = state.secretKey || '';
-      const isServerKey = Boolean(serverKey) && (apikey === serverKey || bearer === serverKey);
+      const isServerKey = serverKeyAccepted(serverKey, apikey, bearer);
       const isKnownUserToken = Boolean(bearer) && state.authTokens.includes(bearer);
       if (bearer && !isServerKey && !isKnownUserToken) {
         return send(401, { message: 'Invalid JWT', code: 'PGRST301' });
@@ -275,13 +286,22 @@ export async function startMockSupabase({ tables = null } = {}) {
       const rpcAuth = String(req.headers.authorization || '');
       const rpcBearer = rpcAuth.startsWith('Bearer ') ? rpcAuth.slice(7).trim() : '';
       const rpcServerKey = state.secretKey || '';
-      const isServerKey = Boolean(rpcServerKey) && (rpcApikey === rpcServerKey || rpcBearer === rpcServerKey);
+      const isServerKey = serverKeyAccepted(rpcServerKey, rpcApikey, rpcBearer);
       const isKnownUserToken = Boolean(rpcBearer) && state.authTokens.includes(rpcBearer);
       if (rpcBearer && !isServerKey && !isKnownUserToken) {
         return send(401, { message: 'Invalid JWT', code: 'PGRST301' });
       }
       // token 的形式是 token-<user id>，還原出呼叫者
       const callerUserId = isKnownUserToken ? rpcBearer.replace(/^token-/, '') : null;
+
+      // 建表語法的版本（第 4 段起才有）。state.schemaVersion = null 模擬「沒補跑第 4 段」：
+      // 真實 PostgREST 對不存在的函式回 404 + PGRST202。匿名也能呼叫（004 有 grant 給 anon）。
+      if (fn === 'lab_schema_version') {
+        if (state.schemaVersion === null) {
+          return send(404, { code: 'PGRST202', message: 'Could not find the function public.lab_schema_version without parameters in the schema cache' });
+        }
+        return send(200, state.schemaVersion ?? 4);
+      }
 
       // 寫入共用資料（api/data.js 的 POST）。真實的函式有樂觀鎖：
       // 帶來的 base revision 跟資料庫的不一樣就丟 revision_conflict。

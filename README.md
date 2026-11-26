@@ -42,7 +42,7 @@ src/lib/                  共用邏輯（前端也用得到）
   app-info.js             版號與名稱（唯一來源）
   initial-state.js        示範資料與空白資料
   setup-validation.js     設定表單的驗證規則
-supabase/migrations/      資料庫建表語法（依序執行 001、002）
+supabase/migrations/      資料庫建表語法（依序執行 001～004；004 是權限的安全修正）
 wizard/                   引導式部署網頁
 scripts/dev-server.mjs    本機開發伺服器（模擬 Vercel）
 scripts/check-project.mjs 專案結構檢查
@@ -118,6 +118,9 @@ Supabase 正在汰換舊金鑰，兩種都要支援：
 | 建立成員時沒帶密碼就隨機產生 | 固定預設密碼等於每個部署都有同一組公開的萬用密碼 |
 | `/api/config` 只回前端金鑰 | 它會送到瀏覽器，secret 金鑰絕不能出現在裡面 |
 | 寫入使用樂觀鎖 | 兩人同時編輯時，後者會被擋下並提示重新載入，不會靜默覆蓋 |
+| 權限檢查不用 `not in` 比對可能是 NULL 的角色 | `NULL not in (...)` 不成立，沒有角色的人（停用成員、自行註冊的帳號）會穿過檢查。一律用 `is_lab_admin()`（004）；`scripts/verify-sql.mjs` 會實際驗證 |
+| 呼叫者角色一律「先問 Auth 是誰、再查那一列」 | RLS 讓成員讀得到所有人的資料列，取第一列會拿到管理員的角色（`api/profiles.js` 曾因此能被一般成員提權） |
+| 對 Supabase 的請求標頭一律走 `supabaseHeaders()` | 舊制金鑰只放 `apikey` 會被當成匿名、讀到 `[]`；`npm run check` 會擋手寫的 `apikey:` |
 | 每日備份只認 `CRON_SECRET` | `x-vercel-cron` 標頭誰都能偽造；備份只留最近 30 份，被人連敲會把舊的好備份擠掉。沒設定 `CRON_SECRET` 的舊部署會退回舊判斷（備份不中斷），`/api/setup-status` 會回 `cronSecretConfigured: false` 提醒補上 |
 
 `npm run check` 會自動檢查「有沒有寫死別人的 Supabase 網址或金鑰」「有沒有寫死的預設密碼」

@@ -397,6 +397,17 @@ check('.gitignore 忽略 .env.local', () => {
   return true;
 });
 
+// 舊制金鑰（eyJ… 的 anon / service_role）只放 apikey 標頭時，PostgREST 會當成匿名請求，
+// RLS 擋掉後回 200 + []，不會報錯。曾經有四支 API 這樣寫：用舊制金鑰的研究室
+// 「第一次設定」做不完、設定狀態永遠是「還沒設定」。標頭一律要走 supabaseHeaders()。
+check('API 沒有自己手寫 Supabase 的 apikey 標頭（要用 supabaseHeaders）', () => {
+  const offenders = fs.readdirSync(path.join(ROOT, 'api'))
+    .filter(name => name.endsWith('.js') && name !== '_supabase.js')
+    .filter(name => /\bapikey\s*:/.test(read(`api/${name}`)));
+  if (offenders.length) throw new Error(`這些檔案還在手寫 apikey：${offenders.join('、')}`);
+  return true;
+});
+
 // ---------------------------------------------------------------------------
 console.log('\n12. 範本 repo 的設定');
 

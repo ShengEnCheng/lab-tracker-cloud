@@ -9,15 +9,19 @@
 //   這支端點不需要登入（否則就雞生蛋蛋生雞），所以只回報「有／沒有」，
 //   不回傳任何金鑰、也不回傳任何成員的個人資料。
 
-import { sendJson, describeConfig, supabaseConfig, applyCors } from './_supabase.js';
+import { sendJson, describeConfig, supabaseConfig, supabaseHeaders, applyCors, probeSchemaVersion } from './_supabase.js';
+
+// 標頭一律用 supabaseHeaders()：舊制金鑰（eyJ… 的 anon / service_role）要同時放進
+// Authorization 才有對應的權限，只放 apikey 會被當成匿名請求 —— 讀到 [] 而不是報錯。
+// 詳見 _supabase.js 的 buildHeaders()。
 import { APP_VERSION, APP_NAME, APP_DISPLAY_NAME } from '../src/lib/app-info.js';
 
 const TABLE_PROBES = ['lab_state', 'lab_profiles', 'lab_settings'];
 
-async function probeTable(url, key, table) {
+async function probeTable(url, keyConfig, table) {
   try {
     const response = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, {
-      headers: { apikey: key },
+      headers: supabaseHeaders(keyConfig),
       signal: AbortSignal.timeout(10000)
     });
     const text = await response.text();
@@ -36,10 +40,10 @@ async function probeTable(url, key, table) {
 // 為什麼需要：003 那段只加了一個欄位，沒有新表。用「表在不在」檢查永遠
 // 會說沒問題，於是漏跑第 3 段的研究室會得到一個看起來正常、但自動更新
 // 開關按下去就壞掉的系統。查一次那個欄位，才問得出真正的答案。
-async function probeColumn(url, key, table, column) {
+async function probeColumn(url, keyConfig, table, column) {
   try {
     const response = await fetch(`${url}/rest/v1/${table}?select=${column}&limit=1`, {
-      headers: { apikey: key },
+      headers: supabaseHeaders(keyConfig),
       signal: AbortSignal.timeout(10000)
     });
     if (response.ok) return true;
@@ -62,7 +66,7 @@ async function readSettings(config) {
   if (!secret) return null;
   try {
     const response = await fetch(`${config.url}/rest/v1/lab_settings?id=eq.1&select=organization_name,organization_code,setup_completed_at`, {
-      headers: { apikey: secret.key },
+      headers: supabaseHeaders(secret),
       signal: AbortSignal.timeout(10000)
     });
     if (!response.ok) return null;
@@ -78,7 +82,7 @@ async function readAdminCount(config) {
   if (!secret) return null;
   try {
     const response = await fetch(`${config.url}/rest/v1/lab_profiles?role=eq.admin&active=is.true&select=id`, {
-      headers: { apikey: secret.key, Prefer: 'count=exact' },
+      headers: supabaseHeaders(secret, '', { Prefer: 'count=exact' }),
       signal: AbortSignal.timeout(10000)
     });
     if (!response.ok) return null;
@@ -123,7 +127,7 @@ export default async function handler(req, res) {
   let authMessage = '';
   try {
     const response = await fetch(`${config.url}/auth/v1/health`, {
-      headers: { apikey: anon.key },
+      headers: supabaseHeaders(anon),
       signal: AbortSignal.timeout(10000)
     });
     authReachable = response.ok;
@@ -154,7 +158,7 @@ export default async function handler(req, res) {
   }
 
   // 第三關：資料表建好了嗎。
-  const probes = await Promise.all(TABLE_PROBES.map(table => probeTable(config.url, anon.key, table)));
+  const probes = await Promise.all(TABLE_PROBES.map(table => probeTable(config.url, anon, table)));
   const missing = probes.filter(probe => !probe.exists).map(probe => probe.name);
   const schemaInstalled = missing.length === 0;
 
@@ -184,7 +188,8 @@ export default async function handler(req, res) {
   // 表都在、但欄位不在，代表這個研究室只跑了前兩段。系統本身能用，
   // 只有「系統設定 → 自動更新」那個開關會壞掉，所以這裡要明確說出來，
   // 讓引導網頁可以提示「補跑第 3 段」，而不是讓使用者按了開關才發現。
-  const autoUpdateColumnReady = await probeColumn(config.url, anon.key, 'lab_settings', 'auto_update_enabled');
+  const autoUpdateColumnReady = await probeColumn(config.url, anon, 'lab_settings', 'auto_update_enabled');
+  const securityFixReady = await probeSchemaVersion(config.url, anon);
 
   // 第四關：完成設定了嗎。
   const settings = await readSettings(config);
@@ -204,18 +209,25 @@ export default async function handler(req, res) {
     // 它是「建議補上」不是「不能用」，不應該讓「設定完成了沒」的判斷變成失敗。
     // （沒設定時備份照跑，只是任何人都能觸發，見 api/backup.js 的說明。）
     cronSecretConfigured: Boolean(String(process.env.CRON_SECRET || '').trim()),
+    securityFixReady,
     checks: {
       // 全部正常時也要有 environment 這一項：呼叫端（引導網頁）會固定讀
       // checks.environment.ok，缺了會變成 undefined 而被誤判成失敗。
       environment: { ok: true, message: '環境變數都已設定。' },
       database: { ok: true, message: '資料庫連線正常。' },
-      schema: autoUpdateColumnReady
-        ? { ok: true, message: '資料表都在。' }
-        : {
+      schema: !autoUpdateColumnReady
+        ? {
             ok: false,
             message: '資料表都在，但還缺第三段語法（003）。系統可以使用，只有「系統設定」裡的自動更新開關無法切換。請回到引導網頁第 4 步「建立資料表」，把第三段貼進 SQL Editor 執行。',
             missing: ['lab_settings.auto_update_enabled']
-          },
+          }
+        : !securityFixReady
+          ? {
+              ok: false,
+              message: '資料表都在，但還缺第四段語法（004，權限的安全修正）。系統可以使用，但少了它，被停用的成員或陌生人有機會清光備份、覆蓋資料。請回到引導網頁第 4 步「建立資料表」，按「複製整份語法」貼進 SQL Editor 再執行一次（貼兩次不會壞）。',
+              missing: ['lab_schema_version()']
+            }
+          : { ok: true, message: '資料表都在。' },
       setup: setupComplete
         ? { ok: true, message: '已經完成設定，可以直接登入使用。' }
         : { ok: false, message: '還沒有人建立管理員帳號。請打開這個網站，照畫面完成第一次設定。' }

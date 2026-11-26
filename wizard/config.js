@@ -71,6 +71,11 @@ export const WIZARD = {
     { table: 'lab_settings', column: 'auto_update_enabled', label: '第 3 段（003）' }
   ],
 
+  // 第 4 段（004）是安全性修正：只改函式、不加表也不加欄位，所以另外問
+  // 「lab_schema_version() 這個函式在不在」。漏跑的症狀完全看不出來 ——
+  // 系統一切正常，只是沒有角色的人能清光備份、覆蓋資料。
+  schemaProbeRpc: { name: 'lab_schema_version', minVersion: 4, label: '第 4 段（004，安全性修正）' },
+
   // 步驟 2 驗證 /api/health 時，可接受的系統名稱。
   // 現行的 api/health.js 回 { app: 'lab-tracker-cloud', … }（來自 src/lib/app-info.js）。
   // 為什麼還留著 'zheng-lab-api'：早期版本的 health 端點回的是這個名字，
