@@ -417,7 +417,28 @@ try {
   });
 
   check('範本 repo 自己跑的時候會立刻結束（不會 reset 掉維護者的工作）', () => {
+    // 交付副本是用 git archive 產生的，裡面沒有 .git —— 那就不是 git repo，
+    // 沒有東西可以同步，應該安靜結束而不是報錯。這項也要驗。
+    const isGitRepo = (() => {
+      try {
+        git(REPO_ROOT, ['rev-parse', '--git-dir']);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
     const selfVersionBefore = readVersion(REPO_ROOT);
+
+    if (!isGitRepo) {
+      const result = runUpdate(REPO_ROOT, ['--dry-run']);
+      assertEqual(result.code, 0, `不是 git repo 時應該安靜結束，實際：${result.stderr}`);
+      assert(/不是 git repo/.test(result.stdout),
+        `應該說明這裡不是 git repo，實際輸出：${result.stdout}`);
+      assertEqual(readVersion(REPO_ROOT), selfVersionBefore, '不應該動到檔案的版號');
+      return;
+    }
+
     const originUrl = git(REPO_ROOT, ['remote', 'get-url', 'origin']);
     const selfResult = runUpdate(REPO_ROOT, ['--upstream', originUrl, '--dry-run']);
     assertEqual(selfResult.code, 0, `應該正常結束，實際：${selfResult.stderr}`);
