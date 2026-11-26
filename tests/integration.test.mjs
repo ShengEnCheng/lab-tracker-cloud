@@ -485,3 +485,45 @@ test('情境：已部署的研究室還沒補跑第 4 段（安全性修正）',
   await api.close();
   await mock.close();
 });
+
+// ---------------------------------------------------------------------------
+// 每日備份只認 CRON_SECRET。沒設定時不能默默失敗：要回 503 並說清楚原因，
+// 不然 Vercel 的排程紀錄只會看到一排 401，沒人知道備份從來沒跑過。
+test('情境：每日備份的觸發權限', async (t) => {
+  const mock = await startMockSupabase();
+  mock.applyEnv(process.env);
+  const api = await startApiServer();
+  await postJson(`${api.base}/api/setup`, VALID_SETUP);
+  const savedSecret = process.env.CRON_SECRET;
+
+  await t.test('沒設定 CRON_SECRET：回 503 cron_secret_missing，偽造的標頭也沒用', async () => {
+    delete process.env.CRON_SECRET;
+    const { status, body } = await jsonFetch(`${api.base}/api/backup`, { headers: { 'x-vercel-cron': '1' } });
+    assert.equal(status, 503);
+    assert.equal(body.error, 'cron_secret_missing');
+    assert.match(body.message, /CRON_SECRET/);
+  });
+
+  await t.test('沒設定時，setup-status 與系統設定頁都會回報', async () => {
+    delete process.env.CRON_SECRET;
+    assert.equal((await jsonFetch(`${api.base}/api/setup-status`)).body.cronSecretConfigured, false);
+    assert.equal((await jsonFetch(`${api.base}/api/update-policy`)).body.cronSecretConfigured, false);
+  });
+
+  await t.test('有設定時：只帶 x-vercel-cron 標頭會被擋（401）', async () => {
+    process.env.CRON_SECRET = 'c'.repeat(64);
+    const { status } = await jsonFetch(`${api.base}/api/backup`, { headers: { 'x-vercel-cron': '1' } });
+    assert.equal(status, 401);
+  });
+
+  await t.test('有設定時：帶對的密碼不會被權限擋下', async () => {
+    process.env.CRON_SECRET = 'c'.repeat(64);
+    const { status } = await jsonFetch(`${api.base}/api/backup`, { headers: { authorization: `Bearer ${'c'.repeat(64)}` } });
+    assert.notEqual(status, 401);
+    assert.notEqual(status, 503);
+  });
+
+  if (savedSecret === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = savedSecret;
+  await api.close();
+  await mock.close();
+});

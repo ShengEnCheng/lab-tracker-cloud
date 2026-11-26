@@ -9,5 +9,5 @@
 
 export const APP_NAME = 'lab-tracker-cloud';
 export const APP_DISPLAY_NAME = '研究室追蹤系統';
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
 export const SCHEMA_VERSION = 1;

@@ -1,25 +1,26 @@
 import { timingSafeEqual } from 'node:crypto';
 import { methodAllowed, sendJson, supabaseServerFetch } from './_supabase.js';
 
-// 誰可以觸發備份。
+// 誰可以觸發備份：只認 CRON_SECRET。
 //
-// 有設定 CRON_SECRET（部署時引導網頁會請使用者產生一組）：
-//   只認密碼。Vercel 的排程會自動帶上 `Authorization: Bearer <CRON_SECRET>`。
-//   `x-vercel-cron` 標頭一律不認 —— 那是請求的人自己填的，任何人都能偽造。
+// 部署時引導網頁會請使用者產生一組 CRON_SECRET 填進 Vercel；Vercel 的排程呼叫這裡時
+// 會自動帶上 `Authorization: Bearer <CRON_SECRET>`。
 //
+// `x-vercel-cron` 標頭一律不認 —— 那是請求的人自己填的，任何人都能偽造。
 // 為什麼這很重要：每次備份完都會清理，只留最近 30 份每日備份。有人連敲 30 次，
 // 舊的好備份就全部被擠掉、換成 30 份「現況」—— 資料被改壞時就沒有舊版可以還原。
 //
-// 沒有設定 CRON_SECRET（這個版本之前部署的研究室）：
-//   退回舊的判斷，讓他們的每日備份不會因為自動更新而突然停掉。
-//   /api/setup-status 會回報「還沒設定 CRON_SECRET」，提醒他們補上。
+// 沒設定 CRON_SECRET 時，任何請求都不放行（handler 會回 503 並寫清楚原因），
+// /api/setup-status 與系統設定頁也會提醒管理員補上。
+export function cronSecretConfigured(env = process.env) {
+  return Boolean(String(env.CRON_SECRET || '').trim());
+}
+
 export function isCronAuthorized(req, env = process.env) {
   const secret = String(env.CRON_SECRET || '').trim();
-  if (secret) {
-    const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
-    return timingSafeEqualText(supplied, secret);
-  }
-  return req.headers['x-vercel-cron'] === '1';
+  if (!secret) return false;
+  const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  return timingSafeEqualText(supplied, secret);
 }
 
 function timingSafeEqualText(a, b) {
@@ -44,6 +45,15 @@ async function writeRun(runId, patch) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return methodAllowed(res, ['GET', 'POST']);
+  // 沒設定密碼：明確說出原因。不這樣做的話，Vercel 的排程紀錄只會看到一排 401，
+  // 沒人知道每日備份其實從來沒跑過。
+  if (!cronSecretConfigured()) {
+    console.error('backup skipped: CRON_SECRET is not set');
+    return sendJson(res, 503, {
+      error: 'cron_secret_missing',
+      message: '每日自動備份沒有執行：還沒設定 CRON_SECRET。請到 Vercel 專案 → Settings → Environment Variables 加上 CRON_SECRET（任意一長串亂數），然後 Redeploy。'
+    });
+  }
   if (!isCronAuthorized(req)) return sendJson(res, 401, { error: 'unauthorized' });
 
   const kind = taipeiKind();

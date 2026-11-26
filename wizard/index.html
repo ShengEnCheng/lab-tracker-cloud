@@ -1290,7 +1290,7 @@ grant execute on function public.lab_schema_version() to anon, authenticated, se
             </div>
             <p class="plain-hint" style="margin-top:10px">
               <strong>CRON_SECRET</strong> 是保護「每日自動備份」的密碼，這個頁面已經幫你產生一組亂數，按複製貼上就好，
-              不用記、也不用存（之後由 Vercel 自己帶著）。沒設的話，任何人都能觸發備份，把舊的備份擠掉。
+              不用記、也不用存（之後由 Vercel 自己帶著）。<strong>沒設的話，每日自動備份不會執行。</strong>
             </p>
             <p class="plain-hint" style="margin-top:10px">
               四個都貼好再按 <strong>Deploy</strong>，等 1～3 分鐘，看到煙火畫面（Congratulations）就是好了。

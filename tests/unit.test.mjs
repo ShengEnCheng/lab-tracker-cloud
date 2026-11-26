@@ -661,8 +661,9 @@ test('backup：誰可以觸發每日備份', async (t) => {
   await t.test('有設 CRON_SECRET：什麼都沒帶要擋', () => {
     assert.equal(isCronAuthorized(req({}), { CRON_SECRET: SECRET }), false);
   });
-  await t.test('沒設 CRON_SECRET（舊部署）：退回舊判斷，備份不會因為自動更新而停掉', () => {
-    assert.equal(isCronAuthorized(req({ 'x-vercel-cron': '1' }), {}), true);
+  await t.test('沒設 CRON_SECRET：一律不放行（連 x-vercel-cron 標頭也不認）', () => {
+    assert.equal(isCronAuthorized(req({ 'x-vercel-cron': '1' }), {}), false);
+    assert.equal(isCronAuthorized(req({ authorization: 'Bearer ' }), {}), false);
     assert.equal(isCronAuthorized(req({}), {}), false);
   });
 });

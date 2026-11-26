@@ -121,7 +121,7 @@ Supabase 正在汰換舊金鑰，兩種都要支援：
 | 權限檢查不用 `not in` 比對可能是 NULL 的角色 | `NULL not in (...)` 不成立，沒有角色的人（停用成員、自行註冊的帳號）會穿過檢查。一律用 `is_lab_admin()`（004）；`scripts/verify-sql.mjs` 會實際驗證 |
 | 呼叫者角色一律「先問 Auth 是誰、再查那一列」 | RLS 讓成員讀得到所有人的資料列，取第一列會拿到管理員的角色（`api/profiles.js` 曾因此能被一般成員提權） |
 | 對 Supabase 的請求標頭一律走 `supabaseHeaders()` | 舊制金鑰只放 `apikey` 會被當成匿名、讀到 `[]`；`npm run check` 會擋手寫的 `apikey:` |
-| 每日備份只認 `CRON_SECRET` | `x-vercel-cron` 標頭誰都能偽造；備份只留最近 30 份，被人連敲會把舊的好備份擠掉。沒設定 `CRON_SECRET` 的舊部署會退回舊判斷（備份不中斷），`/api/setup-status` 會回 `cronSecretConfigured: false` 提醒補上 |
+| 每日備份只認 `CRON_SECRET` | `x-vercel-cron` 標頭誰都能偽造；備份只留最近 30 份，被人連敲會把舊的好備份擠掉。沒設定 `CRON_SECRET` 時一律不放行、回 503 `cron_secret_missing`；`/api/setup-status` 與系統設定頁（`/api/update-policy`）會回 `cronSecretConfigured: false` 提醒補上 |
 
 `npm run check` 會自動檢查「有沒有寫死別人的 Supabase 網址或金鑰」「有沒有寫死的預設密碼」
 「secret 金鑰有沒有外洩」，這幾項一旦漏掉，複製出去的研究室會連到別人的資料庫。

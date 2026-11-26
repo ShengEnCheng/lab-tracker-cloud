@@ -15,6 +15,7 @@ import { sendJson, describeConfig, supabaseConfig, supabaseHeaders, applyCors, p
 // Authorization 才有對應的權限，只放 apikey 會被當成匿名請求 —— 讀到 [] 而不是報錯。
 // 詳見 _supabase.js 的 buildHeaders()。
 import { APP_VERSION, APP_NAME, APP_DISPLAY_NAME } from '../src/lib/app-info.js';
+import { cronSecretConfigured } from './backup.js';
 
 const TABLE_PROBES = ['lab_state', 'lab_profiles', 'lab_settings'];
 
@@ -205,10 +206,9 @@ export default async function handler(req, res) {
       ? { name: settings.organization_name, code: settings.organization_code || '' }
       : null,
     adminExists: (adminCount || 0) > 0,
-    // 每日備份的保護密碼有沒有設定。刻意放在 checks 外面：
-    // 它是「建議補上」不是「不能用」，不應該讓「設定完成了沒」的判斷變成失敗。
-    // （沒設定時備份照跑，只是任何人都能觸發，見 api/backup.js 的說明。）
-    cronSecretConfigured: Boolean(String(process.env.CRON_SECRET || '').trim()),
+    // 每日備份的密碼有沒有設定。沒設定時每日自動備份不會執行（見 api/backup.js）。
+    // 刻意放在 checks 外面：系統本身仍然能用，不應該讓「設定完成了沒」的判斷變成失敗。
+    cronSecretConfigured: cronSecretConfigured(),
     securityFixReady,
     checks: {
       // 全部正常時也要有 environment 這一項：呼叫端（引導網頁）會固定讀
