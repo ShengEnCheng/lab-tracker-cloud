@@ -186,7 +186,7 @@ npm run dev
 ## 測試
 
 ```bash
-npm run check             # 結構檢查 40 項（含「有沒有寫死金鑰」）
+npm run check             # 結構檢查（含「有沒有寫死金鑰」、repo 讀不讀得到）
 npm run test:unit         # 78 項：驗證規則、金鑰樣式、引導網頁的純函式
 npm run test:integration  # 32 項：用假資料庫跑完整流程
 npm run test:e2e          # 53 項：照瀏覽器實際發的請求打一輪
@@ -196,16 +196,17 @@ npm run test:roster       # 11 項：成員名冊不能被外來備份蓋掉、�
 npm run test:export       # 16 項：匯出檔裡每一個欄位都在、一個都沒被改
 npm run test:import       # 32 項：使用者真的上傳一份匯出檔，能不能匯進新系統
 npm run test:import-ui    # 20 項：用瀏覽器按「⭱ 匯入」選那份檔案，整條路走一遍
+npm run test:update       # 16 項：研究室部署好之後，維護者怎麼幫他們更新
 npm run test:checkup      # 33 項：使用者每天要做的事，逐一真的做一遍
 npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
-npm run test:journey      # 25 項：引導網頁從第 1 步真的走到第 7 步
+npm run test:journey      # 27 項：引導網頁從第 1 步真的走到第 7 步
 npm run test:ui           # 38 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（423 項）
+npm run test:all          # 全部（439 項）
 ```
 
-### 九支測試各負責哪一段
+### 十支測試各負責哪一段
 
-這套產品的路很長，切成九段來測，任一段壞掉都不會被別段掩蓋：
+這套產品的路很長，切成十段來測，任一段壞掉都不會被別段掩蓋：
 
 | 測試 | 涵蓋的路 |
 |---|---|
@@ -216,12 +217,19 @@ npm run test:all          # 全部（423 項）
 | `test:export` | **資料完整導出**：每一種資料的每一個欄位，匯出後都還在、都沒被改 |
 | `test:import` | **收得下來**：拿一份真的匯出檔 POST 進新系統，資料與名冊都對 |
 | `test:import-ui` | **畫面上真的能按**：用瀏覽器把檔案塞進「⭱ 匯入」，走完確認與快照 |
+| `test:update` | **交付之後的維護**：研究室怎麼更新、為什麼不能用 merge、更新不會碰資料 |
 | `test:checkup` | **每天要做的事**：新增成員、打勾、切頁籤、看月曆、匯出，逐一真的做一遍 |
 | `test:journey` | 助理在引導網頁上從第 1 步按到第 7 步，每步驗證都要通過 |
 
 `test:session` 特別重要：它是唯一會驗「兩個人同時改同一份資料」的地方。
 先送的人成功、後送的人被擋下（409），而且**被擋下的那次不能偷偷覆蓋別人的資料**。
 這是研究室多人使用時每天都會遇到的情況。
+
+`test:update` 守的是「這份文件寫的步驟是真的做得到的」。它用真 git 重建一個
+「研究室用一鍵部署拿到的副本」，然後實際去 merge 一次，記下衝突的長相 ——
+因為文件原本寫的更新方式（按「Sync fork」）**根本做不出來**：一鍵部署是
+複製一份新 repo，不是 fork，那個按鈕不會出現。所以這支測試驗的是
+「文件只能寫驗證過的做法」，不是「文件寫得漂亮」。
 
 `test:export` 守的是使用者最後的保命手段。匯出看起來只是 `JSON.stringify`，
 但只要有一個欄位沒被寫進去，那個欄位就是**永久消失，而且不會有任何錯誤訊息**。
@@ -371,7 +379,21 @@ export const TEMPLATE = {
 ## 發布新版
 
 這個專案**沒有**本機版那種「拖 ZIP 進更新工具」的機制 —— 雲端版的程式碼在
-GitHub、資料在 Supabase，兩者本來就分開。更新流程如下。
+GitHub、資料在 Supabase，兩者本來就分開。
+
+### 先搞清楚：一鍵部署是「複製」，不是 fork
+
+這件事決定了更新方式，所以先講清楚。研究室的 GitHub repo 是 Vercel 用
+`repository-url` **複製一份新 repo**（clone）到他們帳號底下建的，不是 fork：
+
+| | fork | 一鍵部署（clone） |
+|---|---|---|
+| 跟範本有血緣關係 | 有 | **沒有**（兩邊沒有共同祖先） |
+| GitHub 有「Sync fork」按鈕 | 有 | **沒有這個按鈕** |
+| 更新方式 | 按 Sync fork | 見下面的四行指令 |
+
+所以**不要教研究室按「Sync fork」** —— 那個按鈕在他們的 repo 上不會出現。
+`tests/update-path.test.mjs` 會實際建一個「一鍵部署副本」來驗證這件事。
 
 ### 你這邊（維護者）
 
@@ -382,12 +404,43 @@ GitHub、資料在 Supabase，兩者本來就分開。更新流程如下。
 
 ### 各研究室那邊
 
-| 他們的 GitHub repo 是… | 更新方式 |
-|---|---|
-| 用 Deploy Button 複製出去的一般 repo | 在 GitHub 頁面按 **Sync fork**，Vercel 會自動重新部署 |
-| 自己 fork 的 | `git pull` 之後 Vercel 自動部署，或到 Vercel 按 **Redeploy** |
+研究室**不需要**、也**不應該**自己改程式碼。他們要調的東西（研究室名稱、
+成員、方案、追蹤時間點）都在資料庫與 `lab_settings`，不在程式碼裡。
+
+更新只有一條路，研究室（或他們的工程師）在自己電腦上跑：
+
+```bash
+cd lab-tracker                      # 他們自己的那份
+git remote add upstream https://github.com/ShengEnCheng/lab-tracker-cloud.git
+git fetch upstream
+git reset --hard upstream/main      # 程式碼變成最新版
+git push --force origin main        # 推回自己的 repo
+```
+
+推回去之後 Vercel 會自動重新部署（約 1～2 分鐘）。
+
+**為什麼用 `reset --hard` 而不是 `merge` / `pull`**：兩邊沒有共同祖先，git
+沒辦法判斷「誰改了哪一行」，只能整個檔案對整個檔案比 —— 只要檔案內容不同就
+產生 `add/add` 衝突（實測：版本差 5 個 commit 時，`index.html`、`README.md`、
+`api/setup.js`… 全部衝突）。那是非技術人員處理不來的。`reset --hard` 沒有這個
+問題，結果也確定（程式碼跟範本一模一樣）。
+
+**代價**：如果研究室自己動手改過程式碼，那些修改會被蓋掉。所以文件要跟他們
+講明白：要調東西請走環境變數、資料庫、或回報維護者，不要直接改程式碼。
 
 **他們的資料不會受影響** —— 資料在 Supabase，程式碼更新完全不碰資料庫。
+研究室的 Supabase 網址與金鑰放在 Vercel 的環境變數，也不在 repo 裡，
+所以 `reset --hard` 不會讓他們連到錯的資料庫。
+`tests/update-path.test.mjs` 會驗證「版控裡沒有 `.env`」「前端沒有寫死 Supabase 網址」。
+
+### 查某個研究室實際在跑哪一版
+
+```bash
+curl https://他們的網址/api/health
+```
+
+看回應裡的 `version`。這支端點不需要登入、也不碰資料庫（資料庫睡著時仍查得到），
+所以適合拿來確認「這個研究室到底更新了沒」。
 
 ### 最大的維護負擔：migration 不會自動跑
 
@@ -409,8 +462,8 @@ GitHub、資料在 Supabase，兩者本來就分開。更新流程如下。
 - `package.json` 的 `version`
 - `src/lib/app-info.js` 的 `APP_VERSION`
 
-`npm run check` 會驗證。**其他地方不要寫死版號** —— 寫死的話更新後設定頁
-會顯示舊版號，維護者就無法判斷研究室真正在跑哪一版。
+`npm run check` 會驗證。**其他地方不要寫死版號** —— 寫死的話更新後
+`/api/health` 會回舊版號，維護者就無法判斷研究室真正在跑哪一版。
 `check-project.mjs` 的第 7 項檢查會擋。
 
 ---
@@ -482,7 +535,7 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（423 項）
+- [ ] `npm run test:all` 全綠（439 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
 - [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那兩段

@@ -81,6 +81,7 @@ const REQUIRED_FILES = [
   'tests/export-completeness.test.mjs',
   'tests/user-export-import.test.mjs',
   'tests/import-button.test.mjs',
+  'tests/update-path.test.mjs',
   'tests/feature-checkup.test.mjs',
   'tests/wizard-journey.test.mjs',
   'tests/wizard.test.mjs',
@@ -323,14 +324,37 @@ check('wizard/config.js 的 repoUrl 格式正確', () => {
   return true;
 });
 
-check('repoUrl 不是預設值（或已知它需要更換）', () => {
+// 引導網頁的一鍵部署會去讀 repoUrl 指向的 repo。如果那個 repo 不存在、
+// 或是 private，別人按「Deploy to Vercel」就會失敗 —— 而失敗訊息是 Vercel
+// 的英文錯誤，研究室看不懂，也不知道要回頭找誰。
+//
+// 所以這裡真的去問一次 git：這個 repo 匿名讀得到嗎？
+//   * 讀得到 → 沒問題，不吵。
+//   * 讀不到 → 印提醒（不是失敗：可能是這台機器沒網路，不該讓本機離線
+//     就把整份交付擋下來）。
+function probeRemoteRepo(url) {
+  try {
+    execFileSync('git', ['ls-remote', '--exit-code', url, 'HEAD'], {
+      stdio: 'pipe',
+      timeout: 15000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    });
+    return { reachable: true };
+  } catch (error) {
+    return { reachable: false, reason: (error.stderr ? String(error.stderr) : error.message).trim() };
+  }
+}
+
+check('repoUrl 指向的 repo 匿名讀得到（一鍵部署才不會失敗）', () => {
   const text = read('wizard/config.js');
   const match = text.match(/repoUrl:\s*'([^']+)'/);
   if (!match) throw new Error('找不到 repoUrl');
-  if (/\/ShengEnCheng\//.test(match[1])) {
-    // 不是錯誤，但要讓維護者看到。上線前必須確認這個 repo 存在且公開。
-    notes.push(`repoUrl 仍是預設值（${match[1]}）—— 上線前請確認這個 repo 已建立、`
-      + '是 public，而且打開網址看得到內容，否則引導網頁的「一鍵部署」會失敗。');
+
+  const probe = probeRemoteRepo(match[1]);
+  if (!probe.reachable) {
+    notes.push(`問不到 ${match[1]}（${probe.reason.split('\n')[0]}）。`
+      + '如果只是這台機器沒網路就沒關係；否則請確認這個 repo 已建立、是 public，'
+      + '不然引導網頁的「一鍵部署」會失敗。');
   }
   return true;
 });
