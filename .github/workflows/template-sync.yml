@@ -51,4 +51,20 @@ jobs:
           git config user.email "lab-tracker-bot@users.noreply.github.com"
 
       - name: 同步範本更新
+        # LAB_SITE_URL：研究室自己網站的網址。腳本要靠它去問
+        # 「這間研究室的介面上，自動更新是開著還是關掉的」。
+        #
+        # 為什麼要人填、不能自動抓：腳本試過從 GitHub Deployments API
+        # 反查網址，實測不可靠 —— 查到的可能是帶版本號的預覽網址
+        # （xxx-abc123-team.vercel.app），也可能是空的；拿錯的網址去問，
+        # 問不到就等於「開關沒作用」，而使用者完全不會知道。
+        #
+        # 沒填也**不會壞**：腳本查不到網址時會照常更新（維持原本行為）。
+        # 代價是介面上的開關不會生效 —— 所以建議填。
+        #
+        # 填法：repo → Settings → Secrets and variables → Actions →
+        #       Variables → New repository variable
+        #       Name: LAB_SITE_URL    Value: https://你們的網址
+        env:
+          LAB_SITE_URL: ${{ vars.LAB_SITE_URL }}
         run: bash scripts/apply-template-update.sh

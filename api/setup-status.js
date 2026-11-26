@@ -31,6 +31,31 @@ async function probeTable(url, key, table) {
   }
 }
 
+// 探測「某個欄位存不存在」。
+//
+// 為什麼需要：003 那段只加了一個欄位，沒有新表。用「表在不在」檢查永遠
+// 會說沒問題，於是漏跑第 3 段的研究室會得到一個看起來正常、但自動更新
+// 開關按下去就壞掉的系統。查一次那個欄位，才問得出真正的答案。
+async function probeColumn(url, key, table, column) {
+  try {
+    const response = await fetch(`${url}/rest/v1/${table}?select=${column}&limit=1`, {
+      headers: { apikey: key },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (response.ok) return true;
+    const text = await response.text().catch(() => '');
+    // 42703 = undefined_column（PostgREST 會連 code 一起回）
+    try {
+      return JSON.parse(text)?.code !== '42703';
+    } catch {
+      return true;
+    }
+  } catch {
+    // 連不上就當作存在 —— 不要因為一次網路抖動就叫人重跑 SQL。
+    return true;
+  }
+}
+
 // 讀設定列。用 secret 金鑰，因為匿名讀不到（RLS 只給管理員）。
 async function readSettings(config) {
   const secret = supabaseConfig(true);
@@ -154,6 +179,13 @@ export default async function handler(req, res) {
     });
   }
 
+  // 第三關之二：第 3 段（003）的欄位在不在。
+  //
+  // 表都在、但欄位不在，代表這個研究室只跑了前兩段。系統本身能用，
+  // 只有「系統設定 → 自動更新」那個開關會壞掉，所以這裡要明確說出來，
+  // 讓引導網頁可以提示「補跑第 3 段」，而不是讓使用者按了開關才發現。
+  const autoUpdateColumnReady = await probeColumn(config.url, anon.key, 'lab_settings', 'auto_update_enabled');
+
   // 第四關：完成設定了嗎。
   const settings = await readSettings(config);
   const adminCount = await readAdminCount(config);
@@ -173,7 +205,13 @@ export default async function handler(req, res) {
       // checks.environment.ok，缺了會變成 undefined 而被誤判成失敗。
       environment: { ok: true, message: '環境變數都已設定。' },
       database: { ok: true, message: '資料庫連線正常。' },
-      schema: { ok: true, message: '資料表都在。' },
+      schema: autoUpdateColumnReady
+        ? { ok: true, message: '資料表都在。' }
+        : {
+            ok: false,
+            message: '資料表都在，但還缺第三段語法（003）。系統可以使用，只有「系統設定」裡的自動更新開關無法切換。請回到引導網頁第 5 步，把第三段貼進 SQL Editor 執行。',
+            missing: ['lab_settings.auto_update_enabled']
+          },
       setup: setupComplete
         ? { ok: true, message: '已經完成設定，可以直接登入使用。' }
         : { ok: false, message: '還沒有人建立管理員帳號。請打開這個網站，照畫面完成第一次設定。' }

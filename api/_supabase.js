@@ -27,7 +27,10 @@ const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 // 不含金鑰也不含個人資料 —— 所以這裡用 '*' 是安全的。
 // 需要身分的端點（data、profiles、backups…）不加 CORS：
 // 那些用 Authorization 標頭帶 JWT，本來就不該讓任意網頁代打。
-const CORS_OPEN_PATHS = new Set(['health', 'setup-status', 'config']);
+// update-policy 也在裡面：GitHub Actions 從 github.com 的 runner 打過來問
+// 「這間研究室關掉自動更新了嗎」。那條請求不會帶任何使用者 token，所以
+// 只開放它自己的 GET（它只回一個布林值與網站網址，沒有成員資料或金鑰）。
+const CORS_OPEN_PATHS = new Set(['health', 'setup-status', 'config', 'update-policy']);
 
 function isCorsOpenPath(req) {
   const url = String(req.url || '');

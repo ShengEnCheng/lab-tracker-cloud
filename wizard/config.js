@@ -40,10 +40,18 @@ export const WIZARD = {
   schemaProbeTable: 'lab_state',
 
   // 步驟 4 驗證時「依序」要確認存在的資料表，一段語法對一張。
-  // 為什麼不只驗 lab_state：建表語法分成兩段（001 與 002），
+  // 為什麼不只驗 lab_state：建表語法分成三段（001、002、003），
   // 只跑第 1 段的人 lab_state 會存在、但少了 lab_settings，
-  // 網站會在「第一次使用」那關壞掉。所以要兩張都問。
+  // 網站會在「第一次使用」那關壞掉。所以要全部都問。
   schemaProbeTables: ['lab_state', 'lab_settings'],
+
+  // 第 3 段（003）沒有新增資料表，只在既有的 lab_settings 上加一個欄位。
+  // 「表在不在」永遠問不出它有沒有跑過，所以另外問這個欄位。
+  // 漏跑的使用者症狀：系統完全正常，只有「系統設定」的自動更新開關按不動。
+  // 那種壞法沒有錯誤訊息，最難查 —— 所以在驗證這一步就抓出來。
+  schemaProbeColumns: [
+    { table: 'lab_settings', column: 'auto_update_enabled', label: '第 3 段（003）' }
+  ],
 
   // 步驟 2 驗證 /api/health 時，可接受的系統名稱。
   // 現行的 api/health.js 回 { app: 'lab-tracker-cloud', … }（來自 src/lib/app-info.js）。

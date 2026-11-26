@@ -116,6 +116,33 @@ export async function startMockSupabase({ tables = null } = {}) {
       });
     }
 
+    // --- Auth：用 token 問「這個人是誰」（GET /auth/v1/user）---
+    //
+    // api/profile.js 與 api/update-policy.js 都靠這支確認呼叫者身分。
+    // 為什麼不能只查 lab_profiles 取第一列：lab_profiles 有多列，
+    // 第一列很可能是管理員 —— 那樣任何登入的人都被當成管理員，
+    // 這是真正的權限漏洞，而且在畫面上完全看不出來。所以要模擬
+    // 「token 換出使用者 id」這件事，讓那種寫法在測試裡就失敗。
+    if (path === '/auth/v1/user' && req.method === 'GET') {
+      const authHeader = String(req.headers.authorization || '');
+      const rawToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+      if (!rawToken) {
+        return send(401, { message: 'invalid claim: missing sub claim' });
+      }
+      // 伺服器金鑰不是使用者身分。
+      if (state.secretKey && rawToken === state.secretKey) {
+        return send(403, { message: 'This endpoint requires a user token' });
+      }
+      if (!state.authTokens.includes(rawToken)) {
+        return send(401, { message: 'invalid claim: missing sub claim', code: 'invalid_jwt' });
+      }
+      const id = rawToken.replace(/^token-/, '');
+      const user = state.authUsers.find(item => item.id === id);
+      // 測試裡常常只登記 token 而沒有建 authUsers 帳號（模擬既有使用者），
+      // 那就用 token 裡的 id 回一個最小身分。
+      return send(200, { id, email: user ? user.email : `${id}@example.test` });
+    }
+
     // --- Auth admin users ---
     if (path === '/auth/v1/admin/users' && req.method === 'GET') {
       return send(200, { users: state.authUsers.map(user => ({ id: user.id, email: user.email, email_confirmed_at: user.email_confirm ? new Date().toISOString() : null })) });

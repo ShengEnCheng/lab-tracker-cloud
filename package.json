@@ -1,6 +1,6 @@
 {
   "name": "lab-tracker-cloud",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "研究室多案追蹤系統（雲端範本，給任何研究室一鍵部署）",
@@ -22,11 +22,13 @@
     "test:import-ui": "node tests/import-button.test.mjs",
     "test:update": "node tests/update-path.test.mjs",
     "test:auto-update": "node tests/auto-update.test.mjs",
+    "test:update-policy": "node tests/auto-update-policy.test.mjs",
+    "test:settings-ui": "node tests/auto-update-settings-ui.test.mjs",
     "test:checkup": "node tests/feature-checkup.test.mjs",
     "test:wizard": "node tests/wizard.test.mjs",
     "test:journey": "node tests/wizard-journey.test.mjs",
     "test:ui": "node tests/ui.test.mjs",
-    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:session && npm run test:handoff && npm run test:roster && npm run test:export && npm run test:import && npm run test:import-ui && npm run test:update && npm run test:auto-update && npm run test:checkup && npm run test:wizard && npm run test:journey && npm run test:ui",
+    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:session && npm run test:handoff && npm run test:roster && npm run test:export && npm run test:import && npm run test:import-ui && npm run test:update && npm run test:auto-update && npm run test:update-policy && npm run test:settings-ui && npm run test:checkup && npm run test:wizard && npm run test:journey && npm run test:ui",
     "verify:sql": "node scripts/verify-sql.mjs"
   }
 }

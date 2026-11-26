@@ -380,6 +380,18 @@ strong { font-weight: 700; }
 
 .info-card li { margin-bottom: .45em; }
 .info-card li:last-child { margin-bottom: 0; }
+.info-card p { margin: 0 0 .6em; line-height: 1.6; }
+.info-card p:last-child { margin-bottom: 0; }
+/* 補充說明：比正文小一號、灰一點，避免搶走主要步驟的注意力 */
+.info-note { font-size: .92em; color: var(--ink-soft); }
+.info-note strong { color: var(--ink); }
+.info-note-muted { opacity: .8; }
+.info-card code {
+  background: var(--paper);
+  border-radius: 4px;
+  padding: .1em .35em;
+  font-size: .92em;
+}
 
 /* 一般說明方塊 */
 .callout {

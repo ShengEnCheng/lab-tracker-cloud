@@ -14,7 +14,7 @@
 // 如果中間有任何一步「按了沒反應」或「驗證卡住」，這支就會紅。
 
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -23,6 +23,17 @@ const CHROME = process.env.CHROME_BIN
 
 const WIZARD_PATH = fileURLToPath(new URL('../wizard/index.html', import.meta.url));
 const wizardDir = dirname(WIZARD_PATH);
+
+// 建表語法有幾段，從 migration 檔數出來，不寫死。
+// 寫死段數的測試會在「有人加了第 N 段」時變紅，看起來像功能壞了，
+// 但其實只是測試跟不上 —— 那種紅燈會訓練人忽略紅燈。
+function countMigrations() {
+  const dir = fileURLToPath(new URL('../supabase/migrations/', import.meta.url));
+  return readdirSync(dir).filter(name => name.endsWith('.sql')).length;
+}
+
+// 在 Node 端算好，等下用 ${…} 注入進瀏覽器的 harness。
+const expectedSegments = countMigrations();
 
 // 模擬的「真實世界」：所有驗證都會通過。
 const harness = `
@@ -61,6 +72,12 @@ window.fetch = async (input, options) => {
   }
   // 第 5 步：資料表都建好了（RLS 讓匿名讀不到，所以是 200 + []）
   if (url.includes('/rest/v1/')) {
+    // 情境 B（window.__missingColumn）：模擬「資料表都建好了，但漏跑第 3 段」。
+    // 這是這一版新增的自動更新開關欄位。漏跑的話系統其他部分都正常，
+    // 只有「系統設定」裡的開關按不動 —— 所以驗證一定要抓得到。
+    if (window.__missingColumn && url.includes('select=auto_update_enabled')) {
+      return respond(400, { code: '42703', message: 'column "auto_update_enabled" does not exist' });
+    }
     return respond(200, []);
   }
   // 第 6 步：設定完成
@@ -176,8 +193,10 @@ async function journey() {
   await goToStep('schema');
 
   // ============ 第 5 步：建資料表 ============
-  check('第 5 步有兩段建表語法可複製',
-    () => $$('#sqlSegments details').length === 2);
+  // 段數從 migration 檔算（由 Node 端注入 __expectedSegments），不寫死。
+  // 寫死的話，加新的一段時會紅一個看起來像「壞了」的燈，但其實是測試過期。
+  check('第 5 步有 ' + window.__expectedSegments + ' 段建表語法可複製（與 migration 檔數一致）',
+    () => $$('#sqlSegments details').length === window.__expectedSegments);
   check('建表語法裡有 do $$ 區塊（沒有被吃掉）',
     () => $$('#sqlSegments pre').some(pre => pre.textContent.includes('do $$')));
 
@@ -204,6 +223,25 @@ async function journey() {
   check('第 7 步有可以點開網站的連結', () => {
     const link = $('#doneUrlLink');
     return link && !link.hidden && String(link.href).includes('my-lab.vercel.app');
+  });
+
+  // 第 7 步是唯一會提到「自動更新」的地方，也是使用者最可能照著做的地方。
+  // 漏掉這段說明，自動更新照樣會跑，但「關掉它」的開關就永遠不會生效
+  // —— 因為沒有人知道要去 GitHub 設 LAB_SITE_URL。
+  check('第 7 步說明自動更新，並講出 LAB_SITE_URL 怎麼設', () => {
+    const text = $('#panel-done')?.textContent || '';
+    return text.includes('自動更新') && text.includes('LAB_SITE_URL');
+  });
+  check('第 7 步的自動更新說明提到「系統設定」可以關掉', () => {
+    const text = $('#panel-done')?.textContent || '';
+    return text.includes('系統設定');
+  });
+  check('第 7 步說明裡帶入使用者自己的網址', () => {
+    return ($('#doneSiteUrlHint')?.textContent || '').includes('my-lab.vercel.app');
+  });
+  check('第 7 步有講「資料不會被動到」（這是使用者最在意的事）', () => {
+    const text = $('#panel-done')?.textContent || '';
+    return text.includes('資料不會被動到') || text.includes('資料不會被影響');
   });
 
   // ============ 全程進度 ============
@@ -239,6 +277,29 @@ async function journey() {
   check('全程沒有 JavaScript 錯誤', () => window.__journey.errors.length === 0);
 }
 
+// 情境 B：資料表都建好了，但漏跑第 3 段（003 的 auto_update_enabled）。
+//
+// 為什麼要演這一齣：漏跑的人在畫面上完全看不出來 —— 系統能登入、
+// 能記錄、能匯出，一切正常。只有當他想去「系統設定」把自動更新關掉時，
+// 開關才會按不動，而且那時他已經在用了，不會知道是少跑一段 SQL。
+// 所以第 5 步的驗證必須在當下就講清楚還缺什麼。
+async function journeyMissingColumn() {
+  await goToStep('schema');
+  await fillField('supabaseUrl', SUPABASE);
+  await fillField('publishableKey', 'sb_publishable_' + 'a'.repeat(30));
+
+  await clickVerifyExpectFail('schema');
+
+  check('漏跑第 3 段時，第 5 步驗證會失敗（不能一路綠燈）', () => {
+    return $('[data-result="schema"]')?.dataset.state === 'fail';
+  });
+  check('失敗訊息說得出少了哪個欄位（使用者才知道要重跑哪一段）', () => {
+    const text = $('[data-result="schema"]')?.textContent || '';
+    return text.includes('auto_update_enabled') || text.includes('第 3 段');
+  });
+  check('漏跑第 3 段的情境沒有 JavaScript 錯誤', () => window.__journey.errors.length === 0);
+}
+
 // 驗證「該失敗的時候會失敗」——填錯資料不能被當成成功
 async function clickVerifyExpectFail(stepId) {
   const button = document.querySelector('[data-verify="' + stepId + '"]');
@@ -258,9 +319,12 @@ function emit(payload) {
   document.body.appendChild(pre);
 }
 
+window.__expectedSegments = ${expectedSegments};
+
 window.addEventListener('load', () => setTimeout(async () => {
   try {
-    await journey();
+    if (window.__missingColumn) await journeyMissingColumn();
+    else await journey();
   } catch (error) {
     results.push({ name: '整條流程走完', ok: false, detail: String(error && error.message || error) });
   }
@@ -269,38 +333,56 @@ window.addEventListener('load', () => setTimeout(async () => {
 </script>`;
 
 const html = readFileSync(WIZARD_PATH, 'utf8');
-const pagePath = join(wizardDir, '.journey-test.html');
-writeFileSync(pagePath, html.replace('</body>', () => harness + '\n</body>'));
 
-let dom;
-try {
-  dom = execFileSync(CHROME, [
-    '--headless=old', '--disable-gpu', '--no-sandbox', '--window-size=1440,900',
-    '--virtual-time-budget=25000', '--dump-dom', `file://${pagePath}`
-  ], { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
-} finally {
-  rmSync(pagePath, { force: true });
+// 把整頁跑一次，回傳瀏覽器裡跑出來的结果。
+// 同一個 harness、只差一個注入的旗標，所以兩個情境測的是同一份程式碼。
+function runPage({ missingColumn }) {
+  const pagePath = join(wizardDir, missingColumn ? '.journey-test-b.html' : '.journey-test.html');
+  const flag = `<script>window.__missingColumn = ${missingColumn ? 'true' : 'false'};<\/script>`;
+  writeFileSync(pagePath, html.replace('</body>', () => flag + harness + '\n</body>'));
+
+  let dom;
+  try {
+    dom = execFileSync(CHROME, [
+      '--headless=old', '--disable-gpu', '--no-sandbox', '--window-size=1440,900',
+      '--virtual-time-budget=25000', '--dump-dom', `file://${pagePath}`
+    ], { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  } finally {
+    rmSync(pagePath, { force: true });
+  }
+
+  const match = dom.match(/<pre id="journey-result">([\s\S]*?)<\/pre>/);
+  if (!match) return null;
+  return JSON.parse(match[1]
+    .replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
 }
 
-const match = dom.match(/<pre id="journey-result">([\s\S]*?)<\/pre>/);
-if (!match) {
-  console.error('✗ 走完整條路的測試沒有回傳結果（引導頁可能載入失敗）。');
-  process.exit(1);
-}
-const payload = JSON.parse(match[1]
-  .replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
-
-console.log('\n【引導網頁：從第 1 步走到第 7 步】');
 let failed = 0;
-for (const { name, ok, detail } of payload.results) {
-  console.log(`${ok ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`);
-  if (!ok) failed += 1;
-}
-if (payload.errors.length) {
-  console.log('JavaScript 錯誤：');
-  for (const error of payload.errors) console.log(`  ${error}`);
-}
-console.log(`（過程中發出的網路請求：${payload.requestCount} 次）`);
+let total = 0;
 
-console.log(`\n完整流程測試：${payload.results.length - failed} 通過，${failed} 失敗`);
+function report(title, payload) {
+  console.log(`\n【${title}】`);
+  if (!payload) {
+    console.log('✗ 這一輪沒有回傳結果（引導頁可能載入失敗）');
+    failed += 1;
+    total += 1;
+    return;
+  }
+  for (const { name, ok, detail } of payload.results) {
+    console.log(`${ok ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`);
+    total += 1;
+    if (!ok) failed += 1;
+  }
+  if (payload.errors.length) {
+    console.log('JavaScript 錯誤：');
+    for (const error of payload.errors) console.log(`  ${error}`);
+  }
+  console.log(`（過程中發出的網路請求：${payload.requestCount} 次）`);
+}
+
+report('引導網頁：從第 1 步走到第 7 步', runPage({ missingColumn: false }));
+// 情境 B 只有在瀏覽器真的跑起來時才有意義（沒有 Chrome 就只跑情境 A）。
+report('引導網頁：漏跑第 3 段時，第 5 步要講清楚', runPage({ missingColumn: true }));
+
+console.log(`\n完整流程測試：${total - failed} 通過，${failed} 失敗`);
 process.exit(failed ? 1 : 0);

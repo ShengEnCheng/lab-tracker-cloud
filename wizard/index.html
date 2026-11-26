@@ -403,6 +403,47 @@ with check (public.current_lab_role() in ('admin', 'backup_admin'));
 -- 而不是由任何匿名請求決定。
 </script>
 
+<!-- 第 3 段：supabase/migrations/003_update_policy.sql
+     必須在第 2 段之後執行（它會 alter 第 2 段建立的 lab_settings 表）。
+     內容必須與該檔案完全一致。 -->
+<script type="text/plain" class="migration-sql" data-sql-segment data-label="第 3 段" data-filename="003_update_policy.sql">
+-- 自動更新的開關：研究室可以在系統介面裡決定「要不要每天自動更新到最新版」。
+--
+-- 為什麼這件事需要一個資料庫欄位
+-- ------------------------------
+-- 真正執行更新的是 GitHub Actions（跑在研究室自己的 repo 裡）。它讀不到
+-- 我們的資料庫，它只能「問網站」。所以流程是：
+--
+--   介面上的開關 → 寫進這裡這一欄 → /api/update-policy 讀出來 → Action 去問
+--
+-- 沒有這一欄，開關就只能存在瀏覽器裡 —— 換一台電腦、換一個瀏覽器就失效，
+-- 而且 Action 永遠讀不到。那不是開關，只是個按鈕。
+--
+-- 為什麼預設是 true（開）
+-- ----------------------
+-- 自動更新是這個系統的預設行為：研究室部署完之後完全不用管就能拿到修正。
+-- 這一欄是「讓不想被自動改動的研究室可以關掉」的逃生門，所以預設維持原本行為。
+--
+-- 為什麼獨立一個 migration，而不是改 002
+-- --------------------------------------
+-- 已經部署的研究室早就跑過 002 了，改 002 不會重跑，他們永遠拿不到這一欄。
+-- 新開一個檔案，引導網頁就能很清楚地說「還缺第 3 段」。
+
+-- if not exists：讓這段語法重複執行也安全（有人按兩次 RUN 不會爆）。
+alter table public.lab_settings
+  add column if not exists auto_update_enabled boolean not null default true;
+
+comment on column public.lab_settings.auto_update_enabled is
+  '研究室是否允許 GitHub Actions 每天自動同步範本更新。false = 介面上關掉了自動更新。';
+
+-- 既有的那一列（如果已經存在）補上預設值。
+-- add column 的 default 對既有資料列本來就會生效，這裡只是明確表達意圖，
+-- 同時處理「欄位以前加過、但值是 null」這種半完成狀態。
+update public.lab_settings
+  set auto_update_enabled = true
+  where auto_update_enabled is null;
+</script>
+
 <div class="page" id="wizardApp">
 
   <header class="masthead">
@@ -865,20 +906,24 @@ with check (public.current_lab_role() in ('admin', 'backup_admin'));
             （表格的意思：欄位與規則）。
           </p>
           <p class="plain-hint">
-            做法是：把下面這段「建表語法」整段複製，貼到 Supabase 的 SQL Editor（貼程式碼的地方）跑一次。
+            做法是：把下面的「建表語法」複製，貼到 Supabase 的 SQL Editor（貼程式碼的地方）跑。
+            這份語法分成幾段，<strong>照順序一段一段貼，每段都要按一次 RUN</strong>。
             跑完就永遠有效，不用每次做。
           </p>
         </div>
 
         <div class="callout callout--info">
-          <h3>怎麼貼？四個動作</h3>
+          <h3>怎麼貼？每一段都做這四個動作</h3>
           <ol class="action-list" style="margin:12px 0 0">
             <li>打開你的 Supabase 專案後台。</li>
             <li>
               左邊選單找到<strong>最下面的 SQL Editor</strong>（圖示像一張紙加 <code>&gt;_</code>）。
               <span class="plain-hint">如果選單收起來了，先按左上角的選單圖示展開。</span>
             </li>
-            <li>按 <strong>New query</strong>，把下面複製的語法整段貼進去。</li>
+            <li>
+              按 <strong>New query</strong>，把第 1 段語法貼進去。
+              <span class="plain-hint">有幾段就重複幾次：每次都要先按 New query 開一個新的，再貼下一段。</span>
+            </li>
             <li>按右下角的 <strong>RUN</strong>（或按 <code>⌘</code>+<code>Enter</code> / <code>Ctrl</code>+<code>Enter</code>）。</li>
           </ol>
         </div>
@@ -1056,6 +1101,30 @@ with check (public.current_lab_role() in ('admin', 'backup_admin'));
               <li><strong>Vercel / Supabase</strong>：網站與資料庫的房東（免費方案）。</li>
               <li><strong>要改畫面或加功能</strong>：第 7 步下面的常見問題有寫。</li>
             </ul>
+          </div>
+
+          <div class="info-card">
+            <h3>自動更新（多半可以跳過）</h3>
+            <p class="info-note">
+              你的網站會每天自己檢查一次有沒有新版（修正錯誤、安全性更新），
+              有就裝上去。<strong>你的資料不會被動到。</strong>
+            </p>
+            <p class="info-note">
+              如果你們不想讓它自己更新，登入系統後打開「⚙️ 系統設定」，
+              把「自動更新」關掉就好。
+            </p>
+            <p class="info-note">
+              <strong>建議順手做這一步，開關才會生效：</strong>
+              到 GitHub 你的 repo → Settings → Secrets and variables → Actions →
+              Variables → New repository variable，名稱填
+              <code>LAB_SITE_URL</code>，值填你的網站網址
+              （<span id="doneSiteUrlHint">你的網址</span>）。
+              只做一次，之後不用再管。
+            </p>
+            <p class="info-note info-note-muted">
+              沒填也不會壞，只是上面那個「系統設定」裡的開關不會有作用
+              （更新會照常進行）。
+            </p>
           </div>
         </div>
 

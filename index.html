@@ -1849,6 +1849,146 @@ td.sticky-col {
       color: var(--ink-light);
     }
 
+    /* 系統設定：自動更新開關 */
+    .settings-row {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 4px 2px 16px;
+      border-bottom: 1px solid var(--soft-line);
+    }
+
+    .settings-text { flex: 1; min-width: 0; }
+
+    .settings-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .settings-desc {
+      margin: 0 0 8px;
+      font-size: 12.5px;
+      line-height: 1.75;
+      color: var(--ink-light);
+    }
+
+    .settings-desc-muted { color: var(--muted); margin-bottom: 0; }
+
+    .settings-control {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+
+    /* 開關本體：用 checkbox + 假軌道，保留鍵盤操作與螢幕閱讀器語意 */
+    .switch { display: inline-flex; cursor: pointer; }
+    .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+    .switch-track {
+      display: block;
+      width: 52px;
+      height: 30px;
+      border-radius: 999px;
+      background: #cbd5e1;
+      border: 1px solid #b6c2d1;
+      transition: background .16s ease, border-color .16s ease;
+      position: relative;
+    }
+
+    .switch-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(11, 18, 32, .28);
+      transition: transform .16s ease;
+    }
+
+    .switch input:checked + .switch-track {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .switch input:checked + .switch-track .switch-thumb { transform: translateX(22px); }
+
+    /* 焦點可見：鍵盤使用者要看得出來現在焦點在哪 */
+    .switch input:focus-visible + .switch-track {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+
+    .switch input:disabled + .switch-track { opacity: .55; cursor: not-allowed; }
+    .switch input:disabled ~ * { cursor: not-allowed; }
+
+    .switch-state {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .switch-state[data-on="true"] { color: var(--green); }
+    .switch-state[data-on="false"] { color: var(--amber); }
+
+    .settings-notice {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      line-height: 1.7;
+      border: 1px solid var(--soft-line);
+      background: var(--surface-muted);
+      color: var(--ink-light);
+    }
+
+    .settings-notice[data-tone="warn"] {
+      background: #fffaeb;
+      border-color: #fedf89;
+      color: #7a4b06;
+    }
+
+    .settings-notice[data-tone="error"] {
+      background: #fef3f2;
+      border-color: #fecdca;
+      color: #912018;
+    }
+
+    .settings-notice[data-tone="ok"] {
+      background: var(--green-soft);
+      border-color: var(--green-border);
+      color: var(--green);
+    }
+
+    .settings-meta {
+      margin-top: 14px;
+      font-size: 11.5px;
+      line-height: 1.8;
+      color: var(--muted);
+    }
+
+    .settings-meta code {
+      font-size: 11px;
+      background: var(--surface-sunken);
+      padding: 1px 5px;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+
+    @media (max-width: 640px) {
+      .settings-row { flex-direction: column; gap: 14px; }
+      .settings-control { flex-direction: row; align-items: center; }
+    }
+
     /* 未完成設定時，把主系統藏起來，避免看到半殘的畫面 */
     body.setup-pending .app-header,
     body.setup-pending main { display: none; }
@@ -1997,6 +2137,7 @@ td.sticky-col {
           <button class="btn btn-primary" id="openAddSubjectBtn" type="button">＋ 新增個案</button>
           <button class="btn btn-success" id="openAddStudyBtn" type="button">＋ 新增研究案</button>
           <button class="btn btn-indigo" id="openManageMembersBtn" type="button" title="管理實驗室成員與學生名冊">👥 人員名冊</button>
+          <button class="btn btn-secondary hidden" id="openSettingsBtn" type="button" title="系統設定：自動更新等">⚙️ 系統設定</button>
         </div>
 
       </div>
@@ -2407,6 +2548,51 @@ td.sticky-col {
   </div>
 
   <!-- MODAL: MANAGE LAB MEMBERS -->
+  <!--
+    系統設定。目前只有一個項目：自動更新。
+
+    為什麼要放在介面上而不是叫研究室去改 GitHub：
+    研究室的人不寫程式，也不該為了「不要被自動改動」而去動 repo。
+    一個開關就是全部的認知負擔。
+  -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title">⚙️ 系統設定</h3>
+        <button class="modal-close" onclick="closeModal('settingsModal')" type="button" aria-label="關閉">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-row">
+          <div class="settings-text">
+            <label class="settings-label" for="autoUpdateToggle">自動更新</label>
+            <p class="settings-desc">
+              開啟時，系統每天會自動檢查有沒有新版本，有的話就自動更新到最新版。
+              修正與新功能會自己送到，研究室完全不用動手。
+            </p>
+            <p class="settings-desc settings-desc-muted">
+              關掉之後就不會再自動變動。你目前的資料（個案、研究案、里程碑）永遠不會被更新影響。
+              之後想恢復，把這個開關打開就好。
+            </p>
+          </div>
+          <div class="settings-control">
+            <label class="switch" for="autoUpdateToggle">
+              <input type="checkbox" id="autoUpdateToggle" role="switch" aria-describedby="autoUpdateState">
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            </label>
+            <span class="switch-state" id="autoUpdateState">讀取中…</span>
+          </div>
+        </div>
+
+        <div id="autoUpdateNotice" class="settings-notice hidden" role="status"></div>
+
+        <div class="settings-meta" id="autoUpdateMeta"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" onclick="closeModal('settingsModal')" type="button">關閉</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="manageMembersModal">
     <div class="modal modal-lg">
       <div class="modal-head">
@@ -2871,6 +3057,10 @@ td.sticky-col {
       if (button) button.textContent = session?.access_token ? '登出' : '登入';
        const memberButton = document.getElementById('openManageMembersBtn');
        if (memberButton) memberButton.classList.toggle('hidden', backendEnabled() && !isAdmin());
+       // 系統設定跟名冊同一個規則：接上後端時只有管理員看得到。
+       // 本機模式（沒有後端）則一律顯示，因為本機沒有權限概念。
+       const settingsButton = document.getElementById('openSettingsBtn');
+       if (settingsButton) settingsButton.classList.toggle('hidden', backendEnabled() && !isAdmin());
     }
 
     async function authRequest(path, body) {
@@ -4315,6 +4505,160 @@ td.sticky-col {
       document.getElementById(id).classList.remove('open');
     }
 
+    // ====== SYSTEM SETTINGS (自動更新開關) ======
+    //
+    // 這個開關真正的效果在 GitHub Actions 那邊：排程每天跑
+    // scripts/apply-template-update.sh，那支腳本會先打 /api/update-policy
+    // 問「這間研究室關掉了嗎」，關掉就什麼都不做。
+    //
+    // 所以這裡只負責兩件事：把目前的狀態顯示對、把使用者的決定寫回去。
+    // 不能在這裡假裝成功——如果寫回失敗，要讓使用者看到失敗。
+    let autoUpdateBusy = false;
+
+    function settingsApiBase() {
+      return backendConfig.apiBase || '/api';
+    }
+
+    function setAutoUpdateNotice(message, tone) {
+      const notice = document.getElementById('autoUpdateNotice');
+      if (!notice) return;
+      if (!message) {
+        notice.classList.add('hidden');
+        notice.textContent = '';
+        return;
+      }
+      notice.textContent = message;
+      notice.dataset.tone = tone || 'info';
+      notice.classList.remove('hidden');
+    }
+
+    function renderAutoUpdateState(enabled) {
+      const toggle = document.getElementById('autoUpdateToggle');
+      const state = document.getElementById('autoUpdateState');
+      if (toggle) toggle.checked = !!enabled;
+      if (state) {
+        state.textContent = enabled ? '開啟' : '已關閉';
+        state.dataset.on = enabled ? 'true' : 'false';
+      }
+    }
+
+    function setAutoUpdateDisabled(disabled, reason) {
+      const toggle = document.getElementById('autoUpdateToggle');
+      if (toggle) {
+        toggle.disabled = !!disabled;
+        if (reason) toggle.title = reason;
+      }
+    }
+
+    async function loadAutoUpdateSetting() {
+      const meta = document.getElementById('autoUpdateMeta');
+      setAutoUpdateDisabled(true, '讀取中');
+      setAutoUpdateNotice('', '');
+
+      // 沒接後端（純本機模式）就沒有自動更新這回事：這台電腦上沒有
+      // GitHub Actions 在跑，關不關都一樣。直接說明，不要留一個看起來
+      // 可以按但其實沒作用的開關。
+      if (!backendEnabled()) {
+        renderAutoUpdateState(false);
+        setAutoUpdateDisabled(true, '本機模式沒有自動更新');
+        setAutoUpdateNotice('這個系統目前是本機模式（沒有連上共用後端），不會自動更新，所以沒有需要關掉的東西。', 'info');
+        if (meta) meta.textContent = '';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${settingsApiBase()}/update-policy`, {
+          headers: { accept: 'application/json' },
+          signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.message || `HTTP ${response.status}`);
+
+        renderAutoUpdateState(payload.autoUpdate !== false);
+
+        if (payload.schemaReady === false) {
+          setAutoUpdateDisabled(true, '資料庫還缺欄位');
+          setAutoUpdateNotice(
+            '資料庫還缺「自動更新開關」這個欄位，所以現在無法改變設定。請回到引導網頁第 5 步，把第 3 段語法貼進 Supabase 的 SQL Editor 執行一次。',
+            'warn'
+          );
+        } else {
+          setAutoUpdateDisabled(!isAdmin(), isAdmin() ? '' : '只有管理員可以改變這個設定');
+          if (!isAdmin()) setAutoUpdateNotice('只有管理員可以改變自動更新設定。', 'info');
+        }
+
+        // 把「開關實際在哪裡生效」寫清楚。使用者有權知道這不是即時動作。
+        if (meta) {
+          const siteUrl = payload.siteUrl || '';
+          meta.innerHTML = siteUrl
+            ? `關掉之後，下一次排程就不會再更新。排程每天執行一次，所以最多一天內生效。<br>系統會用 <code>${escapeHtml(siteUrl)}/api/update-policy</code> 判斷目前狀態。`
+            : '關掉之後，下一次排程就不會再更新。排程每天執行一次，所以最多一天內生效。';
+        }
+      } catch (error) {
+        renderAutoUpdateState(false);
+        setAutoUpdateDisabled(true, '讀不到設定');
+        setAutoUpdateNotice(`讀不到自動更新設定（${error.message}）。這不影響你現在使用系統。`, 'warn');
+        if (meta) meta.textContent = '';
+      }
+    }
+
+    async function saveAutoUpdateSetting(enabled) {
+      if (autoUpdateBusy) return;
+      autoUpdateBusy = true;
+      setAutoUpdateDisabled(true, '儲存中');
+
+      // 先把畫面停在「儲存中」，但不要先改開關本身 —— 等後端確認了再改，
+      // 免得失敗時畫面上顯示的是一個沒生效的狀態。
+      const state = document.getElementById('autoUpdateState');
+      const previousText = state ? state.textContent : '';
+      if (state) state.textContent = '儲存中…';
+
+      try {
+        const response = await fetch(`${settingsApiBase()}/update-policy`, {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json',
+            ...(backendConfig.token ? { authorization: `Bearer ${backendConfig.token}` } : {})
+          },
+          body: JSON.stringify({ autoUpdate: !!enabled })
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          // schema_outdated 是最可能發生的情況（研究室還沒跑第 3 段 SQL）。
+          // 這種時候要告訴他怎麼修，而不是只說「失敗」。
+          if (payload.error === 'schema_outdated') {
+            throw new Error(payload.message || '資料庫還缺欄位。');
+          }
+          throw new Error(payload.message || `HTTP ${response.status}`);
+        }
+
+        renderAutoUpdateState(payload.autoUpdate !== false);
+        setAutoUpdateNotice(
+          enabled
+            ? '已開啟自動更新。下一次排程會恢復檢查新版本。'
+            : '已關閉自動更新。之後不會再自動變動，你目前的資料不受影響。',
+          'ok'
+        );
+        setAutoUpdateDisabled(!isAdmin(), isAdmin() ? '' : '只有管理員可以改變這個設定');
+      } catch (error) {
+        // 失敗就把開關撥回去，不要留下假的狀態。
+        const toggle = document.getElementById('autoUpdateToggle');
+        if (toggle) toggle.checked = !enabled;
+        if (state) state.textContent = previousText;
+        setAutoUpdateNotice(`沒有存成功：${error.message}`, 'error');
+        setAutoUpdateDisabled(!isAdmin(), isAdmin() ? '' : '只有管理員可以改變這個設定');
+      } finally {
+        autoUpdateBusy = false;
+      }
+    }
+
+    function openSettingsModal() {
+      document.getElementById('settingsModal').classList.add('open');
+      loadAutoUpdateSetting();
+    }
+
     // ====== MEMBER MANAGEMENT LOGIC ======
     function openManageMembersModal() {
       if (backendEnabled() && !isAdmin()) {
@@ -4887,6 +5231,19 @@ td.sticky-col {
       document.getElementById('openAddSubjectBtn').addEventListener('click', () => openAddSubjectModal());
       document.getElementById('openAddStudyBtn').addEventListener('click', () => openCreateStudyModal());
       document.getElementById('openManageMembersBtn').addEventListener('click', () => openManageMembersModal());
+
+      // 系統設定（自動更新開關）。
+      // 綁定方式刻意跟上面的按鈕一致：直接 addEventListener，字串裡不留
+      // 內聯 onclick，這樣測試可以用真的點擊事件驗證。
+      const openSettingsBtn = document.getElementById('openSettingsBtn');
+      if (openSettingsBtn) openSettingsBtn.addEventListener('click', () => openSettingsModal());
+
+      const autoUpdateToggle = document.getElementById('autoUpdateToggle');
+      if (autoUpdateToggle) {
+        autoUpdateToggle.addEventListener('change', event => {
+          saveAutoUpdateSetting(event.target.checked);
+        });
+      }
 
       // Fill blank music40 questionnaire dates with corresponding evaluation dates
       document.getElementById('fillMusic40QuizDatesBtn').addEventListener('click', () => {

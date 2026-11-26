@@ -967,6 +967,7 @@ function collectElements(doc) {
     deployLink: doc.getElementById('deployLink'),
     deployUrlText: doc.getElementById('deployUrlText'),
     doneUrl: doc.getElementById('doneUrl'),
+    doneSiteUrlHint: doc.getElementById('doneSiteUrlHint'),
     doneUrlLink: doc.getElementById('doneUrlLink')
   };
 }
@@ -1245,6 +1246,11 @@ function updateNavChecks(elements, state) {
 function syncDynamicText(elements, state) {
   // 側邊欄與其他用「目前值」組字的地方（之後要加可以放這裡）
   const siteUrl = normalizeSiteUrl(state.siteUrl);
+  if (elements.doneSiteUrlHint) {
+    // 第 7 步說明自動更新的那張卡片要顯示使用者自己的網址，
+    // 否則他得回去前面找 —— 而這裡正是他準備去設定 GitHub 變數的時候。
+    elements.doneSiteUrlHint.textContent = siteUrl || '你的網址';
+  }
   if (elements.doneUrl) {
     elements.doneUrl.textContent = siteUrl || '（還沒填網站網址）';
   }
@@ -1778,6 +1784,48 @@ async function verifyDatabase(state) {
   };
 }
 
+// 問資料庫「這個欄位在不在」。
+//
+// PostgREST 對不存在的欄位會回 400 加 code 42703（undefined_column）。
+// 其他任何狀況（連不上、權限、404）都回 exists:null =「不確定」，
+// 由呼叫端決定要不要判斷失敗 —— 不確定的時候不可以說使用者做錯。
+async function probeColumnExists(supabaseUrl, key, table, column) {
+  try {
+    const response = await fetchWithTimeout(
+      `${supabaseUrl}/rest/v1/${encodeURIComponent(table)}?select=${encodeURIComponent(column)}&limit=1`,
+      { headers: { apikey: key, accept: 'application/json' } }
+    );
+    if (response.ok) return { exists: true };
+    const body = await readResponseBody(response);
+    return { exists: interpretColumnProbe(body, column) };
+  } catch {
+    return { exists: null };
+  }
+}
+
+// 從 PostgREST 的錯誤內容判斷「欄位不存在」還是「其他問題」。
+// 只有明確的 42703 / "column ... does not exist" 才算不存在。
+// 匯出給單元測試用：這段判斷錯了會讓「漏跑第 3 段」完全看不出來。
+export function interpretColumnProbe(body, column) {
+  let parsed = null;
+  try {
+    parsed = typeof body === 'string' ? JSON.parse(body) : body;
+  } catch {
+    parsed = null;
+  }
+  if (parsed && typeof parsed === 'object') {
+    if (parsed.code === '42703') return false;
+    const message = String(parsed.message || '');
+    // PostgREST 的訊息會把欄位名加上雙引號，例如
+    //   column "auto_update_enabled" does not exist
+    // 所以引號（單、雙、反引號）都要當作可能出現的字元，否則這條判斷
+    // 永遠不會成立，變成「只認 code，不認文字」。
+    const quoted = `[\"'\`]?`;
+    if (new RegExp(`column\\s+${quoted}[\\w.]*${column}[\\w.]*${quoted}\\s+does not exist`, 'i').test(message)) return false;
+  }
+  return null;
+}
+
 async function verifySchema(state) {
   const supabaseUrl = normalizeSupabaseUrl(state.supabaseUrl);
   const key = String(state.publishableKey || '').trim();
@@ -1822,6 +1870,25 @@ async function verifySchema(state) {
       };
     }
     verdicts.push({ table, verdict: interpretSchemaProbe({ status, body, tableName: table }) });
+  }
+
+  // 表都在了，還要確認「只在既有表上加欄位」的那一段有沒有跑。
+  // 第 3 段（003）就是這種：它不新增表，所以上面的表探測永遠說沒問題。
+  // 漏跑的話系統看起來完全正常，只有自動更新開關按不動 —— 在驗證這一步
+  // 就講清楚，比讓他自己按到壞掉再回報好得多。
+  const columnProbes = Array.isArray(WIZARD.schemaProbeColumns) ? WIZARD.schemaProbeColumns : [];
+  for (const probe of columnProbes) {
+    if (!probe || !probe.table || !probe.column) continue;
+    const check = await probeColumnExists(supabaseUrl, key, probe.table, probe.column);
+    if (check.exists === false) {
+      return {
+        state: 'fail',
+        message: `資料表都在，但還缺${probe.label || '一段語法'}：`
+          + `「${probe.table}」少了「${probe.column}」這個欄位。`
+          + '系統可以使用，只有「系統設定」裡的自動更新開關會按不動。'
+          + '請把上面屬於該段的那段語法貼進 Supabase 的 SQL Editor，按一次 RUN。'
+      };
+    }
   }
 
   const missing = verdicts.filter(item => !item.verdict.schemaInstalled);
@@ -1938,7 +2005,7 @@ async function verifyAdmin(state) {
   const alreadyMentionsForm = details.some(text => /第一次使用|表單|建立管理員/.test(text));
 
   if (pendingIds.has('schema')) {
-    parts.push('這要回到第 5 步「建立資料表」，把建表語法（記得兩段都要）貼進 Supabase 的 SQL Editor 執行。');
+    parts.push('這要回到第 5 步「建立資料表」，把建表語法（記得每一段都要）貼進 Supabase 的 SQL Editor 執行。');
   } else if (pendingIds.has('environment')) {
     parts.push('請回到第 4 步「建立資料庫」，確認 Vercel 上有把 Supabase 的金鑰填好（照 Vercel 的畫面點就會自動填）。');
   } else if (pendingIds.has('database')) {

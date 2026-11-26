@@ -63,6 +63,7 @@ const REQUIRED_FILES = [
   // 資料庫
   'supabase/migrations/001_lab_state.sql',
   'supabase/migrations/002_lab_settings.sql',
+  'supabase/migrations/003_update_policy.sql',
   // 工具
   'scripts/dev-server.mjs',
   'scripts/verify-sql.mjs',
@@ -83,6 +84,8 @@ const REQUIRED_FILES = [
   'tests/import-button.test.mjs',
   'tests/update-path.test.mjs',
   'tests/auto-update.test.mjs',
+  'tests/auto-update-policy.test.mjs',
+  'tests/auto-update-settings-ui.test.mjs',
   'tests/feature-checkup.test.mjs',
   'tests/wizard-journey.test.mjs',
   'tests/wizard.test.mjs',
@@ -292,6 +295,95 @@ check('002 建立研究室設定表且沒有開放 insert', () => {
   if (!sql.includes('lab_settings')) throw new Error('找不到 lab_settings');
   if (/create policy[\s\S]*?for insert/i.test(sql)) {
     throw new Error('不該有 insert 政策：第一列只能由伺服器 secret 金鑰建立，否則任何人可搶先設定');
+  }
+  return true;
+});
+check('003 加上自動更新開關欄位，且預設是開的', () => {
+  const sql = read('supabase/migrations/003_update_policy.sql');
+  if (!/add column if not exists\s+auto_update_enabled\s+boolean\s+not null\s+default true/i.test(sql)) {
+    throw new Error('沒有一個預設為 true 的 auto_update_enabled 欄位');
+  }
+  // 必須是 if not exists：研究室可能按兩次 RUN，重跑不能爆。
+  if (!/add column if not exists/i.test(sql)) {
+    throw new Error('alter table 必須用 add column if not exists，重複執行才不會失敗');
+  }
+  return true;
+});
+
+// 「介面上關掉自動更新」是跨三個地方的約定：介面寫進資料庫、API 讀出來、
+// Action 去問 API。任何一環斷掉都不會有錯誤訊息 —— 開關看起來能按，
+// 但自動更新照樣發生。這種壞法只能靠結構檢查守住。
+check('自動更新開關的三段約定都在（介面／API／Action）', () => {
+  const api = read('api/update-policy.js');
+  if (!/auto_update_enabled/.test(api)) {
+    throw new Error('api/update-policy.js 沒有讀寫 auto_update_enabled');
+  }
+  // API 的 GET 必須免登入：GitHub Actions 從 github.com 打過來，不帶使用者 token。
+  if (!/req\.method === 'GET'/.test(api)) {
+    throw new Error('api/update-policy.js 沒有處理 GET');
+  }
+  const open = read('api/_supabase.js');
+  if (!/update-policy/.test(open)) {
+    throw new Error('update-policy 不在 CORS 開放清單裡，Actions 會被 CORS 擋掉');
+  }
+  const script = read('scripts/apply-template-update.sh');
+  if (!/api\/update-policy/.test(script)) {
+    throw new Error('更新腳本沒有去問 /api/update-policy，開關不會生效');
+  }
+  if (!/autoUpdate/.test(script)) {
+    throw new Error('更新腳本沒有讀 autoUpdate 欄位');
+  }
+  const ui = read('index.html');
+  if (!/id="autoUpdateToggle"/.test(ui)) {
+    throw new Error('介面上沒有自動更新的開關');
+  }
+  return true;
+});
+
+check('更新腳本在「任何 git 動作之前」就檢查開關', () => {
+  const script = read('scripts/apply-template-update.sh');
+  const lines = script.split('\n');
+
+  // 只看「真的會被執行到的指令」：
+  //   · 跳過註解與空行
+  //   · 跳過函式定義的內容（commit_as_author() 裡有 git commit，
+  //     那是「以後會被呼叫的東西」，不是現在就執行的動作）
+  const inFunction = lines.map(() => false);
+  let openFunction = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!openFunction && /^[a-z_]+\s*\(\)\s*\{/.test(lines[i])) openFunction = true;
+    inFunction[i] = openFunction;
+    if (openFunction && lines[i] === '}') openFunction = false;
+  }
+
+  const isExecutable = index => {
+    const trimmed = lines[index].trim();
+    if (!trimmed || trimmed.startsWith('#')) return false;
+    if (inFunction[index]) return false;
+    return true;
+  };
+  const firstIndexOf = predicate => {
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!isExecutable(i)) continue;
+      if (predicate(lines[i])) return i;
+    }
+    return -1;
+  };
+
+  const policyIndex = firstIndexOf(line => line.includes('api/update-policy'));
+  if (policyIndex === -1) throw new Error('腳本沒有檢查開關');
+
+  // 關掉的意思是「什麼都不要動」。如果先 fetch 或先改檔案才檢查，
+  // 資料夾已經被動過了，之後再 exit 也回不去。
+  const firstMutation = firstIndexOf(line =>
+    /git\s+(fetch|reset|commit|push|checkout|clean)/.test(line)
+    || /^commit_as_author\s+["']/.test(line.trim())
+  );
+  if (firstMutation !== -1 && firstMutation < policyIndex) {
+    throw new Error(
+      `檢查開關在第 ${policyIndex + 1} 行，但第 ${firstMutation + 1} 行就已經有 git 動作了 —— `
+      + '關掉時工作區會被改過'
+    );
   }
   return true;
 });

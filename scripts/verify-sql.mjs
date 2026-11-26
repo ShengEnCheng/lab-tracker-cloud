@@ -1,7 +1,7 @@
 // 驗證建表語法真的能跑起來。
 //
 // 為什麼需要這支：助理在引導網頁第 5 步貼進 Supabase 的，就是
-// supabase/migrations/ 裡那兩段 SQL。那兩段只要有一個字打錯
+// supabase/migrations/ 裡那幾段 SQL。只要有一個字打錯
 // （例如樣板字串把 `$$` 吃成 `$`），**每一個研究室都會卡在同一步**，
 // 而且錯誤訊息是 PostgreSQL 的語法錯誤，助理完全看不懂。
 //
@@ -27,7 +27,8 @@ const ROOT = path.resolve(__dirname, '..');
 
 const MIGRATIONS = [
   'supabase/migrations/001_lab_state.sql',
-  'supabase/migrations/002_lab_settings.sql'
+  'supabase/migrations/002_lab_settings.sql',
+  'supabase/migrations/003_update_policy.sql'
 ];
 
 let failed = 0;
@@ -42,7 +43,7 @@ async function check(name, fn) {
   }
 }
 
-// 從引導網頁取出「助理真正會貼上的那兩段」，而不是直接讀 migration 檔。
+// 從引導網頁取出「助理真正會貼上的那幾段」，而不是直接讀 migration 檔。
 // 為什麼：內嵌到 HTML 的過程才是最容易出錯的地方（`$$` 這類樣板字串陷阱），
 // 驗證助理手上那份，才有意義。
 function readWizardSqlSegments() {
@@ -72,14 +73,14 @@ const { PGlite } = await loadPGlite();
 
 const segments = readWizardSqlSegments();
 console.log('\n【引導網頁裡助理實際會貼上的建表語法】');
-await check('取出兩段語法', () => {
+await check('取出每一段語法', () => {
   if (segments.length !== MIGRATIONS.length) {
     throw new Error(`預期 ${MIGRATIONS.length} 段，實際 ${segments.length} 段`);
   }
   return `共 ${segments.length} 段`;
 });
 
-await check('兩段語法與 migration 檔逐字相同', () => {
+await check('每一段語法都與 migration 檔逐字相同', () => {
   const problems = [];
   MIGRATIONS.forEach((rel, index) => {
     const onDisk = fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\s+$/, '');
@@ -95,19 +96,29 @@ await check('兩段語法與 migration 檔逐字相同', () => {
 });
 
 // 這是實際會發生、而且很難自己看出來的錯：JS 的樣板字串／字串替換會把 `$$` 吃掉。
+//
+// 但不能要求「每一段都要有 $$」—— 不是每段 SQL 都需要 do 區塊。
+// 第 3 段只是 alter table 加一個欄位，本來就沒有 $$（加一個空 do 區塊
+// 只是為了讓檢查通過，是為了測試而寫的程式碼）。
+// 該驗的是「檔案裡有 $$ 的，貼到畫面上之後還在」。
 await check('PostgreSQL 的 $$ 沒有被吃掉', () => {
   const problems = [];
   segments.forEach((sql, index) => {
-    // `do $$ begin … end $$;` 這類區塊，$ 的數量必須成對
-    const dollars = (sql.match(/\$\$/g) || []).length;
+    // 有不成對的 $ 就是被吃掉了。
     const singleDollar = (sql.match(/(?<!\$)\$(?!\$)/g) || []).length;
     if (singleDollar > 0) {
       problems.push(`第 ${index + 1} 段有不成對的 $（${singleDollar} 個），可能是 $$ 被吃掉`);
     }
-    if (dollars === 0) problems.push(`第 ${index + 1} 段找不到任何 $$`);
+    // 檔案裡有 $$，畫面上也必須有，而且數量一樣。
+    const onDisk = fs.readFileSync(path.join(ROOT, MIGRATIONS[index]), 'utf8');
+    const expected = (onDisk.match(/\$\$/g) || []).length;
+    const actual = (sql.match(/\$\$/g) || []).length;
+    if (expected !== actual) {
+      problems.push(`第 ${index + 1} 段的 $$ 數量不對（檔案 ${expected} 個、畫面 ${actual} 個）`);
+    }
   });
   if (problems.length) throw new Error(problems.join('；'));
-  return '$$ 數量正確';
+  return '$$ 數量與 migration 檔一致';
 });
 
 console.log('\n【實際執行】');
@@ -136,13 +147,18 @@ await db.exec(`
   end $$;
 `);
 
-for (let index = 0; index < segments.length; index += 1) {
-  const label = MIGRATIONS[index].split('/').pop();
-  // 001 開頭的 pgcrypto 是 Supabase 內建的擴充，空的 PostgreSQL 沒有
-  const sql = segments[index].replace(
+// 001 開頭的 pgcrypto 是 Supabase 內建的擴充，空的 PostgreSQL 沒有。
+// 重跑測試也要用同一套改寫，否則會因為環境差異而不是因為 SQL 本身失敗。
+function forLocalPostgres(sql) {
+  return sql.replace(
     /create extension if not exists pgcrypto;/i,
     '-- pgcrypto：Supabase 內建，這裡略過'
   );
+}
+
+for (let index = 0; index < segments.length; index += 1) {
+  const label = MIGRATIONS[index].split('/').pop();
+  const sql = forLocalPostgres(segments[index]);
   try {
     await db.exec(sql);
     console.log(`✔ ${label} 執行成功`);
@@ -204,6 +220,49 @@ await check('jsonb_sha256 能算出正確的雜湊', async () => {
   const hash = result.rows[0]?.hash;
   if (!/^[0-9a-f]{64}$/.test(String(hash || ''))) throw new Error(`算出來不是 sha256：${hash}`);
   return String(hash).slice(0, 16) + '…';
+});
+
+// 研究室很可能把同一段語法貼兩次（不確定跑過了沒，或換瀏覽器重做一次）。
+// 這種情況下不能出現錯誤訊息 —— 助理看到紅色錯誤就會停下來問人，
+// 而其實什麼都沒壞。所以每一段都必須是「跑幾次都一樣」。
+await check('每一段重跑一次也不會報錯（貼兩次是安全的）', async () => {
+  for (const [index, sql] of segments.entries()) {
+    try {
+      await db.exec(forLocalPostgres(sql));
+    } catch (error) {
+      throw new Error(`第 ${index + 1} 段重跑時失敗：${error.message}`);
+    }
+  }
+  // 重跑之後，欄位還是只有一個、預設值還是 true。
+  const result = await db.query(`
+    select column_default, is_nullable
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'lab_settings'
+      and column_name = 'auto_update_enabled'
+  `);
+  if (result.rows.length !== 1) {
+    throw new Error(`重跑後欄位數量變成 ${result.rows.length} 個`);
+  }
+  if (result.rows[0].is_nullable !== 'NO') {
+    throw new Error('重跑後欄位變成可以為空');
+  }
+  return '三段都重跑過，沒有報錯';
+});
+
+await check('預設值是「開啟」（既有研究室升級後行為不變）', async () => {
+  const result = await db.query(`
+    select column_default
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'lab_settings'
+      and column_name = 'auto_update_enabled'
+  `);
+  const value = String(result.rows[0]?.column_default || '');
+  if (!/true/i.test(value)) {
+    throw new Error(`預設值是 ${value}，應該要是 true（否則升級後所有研究室的自動更新會突然停掉）`);
+  }
+  return value;
 });
 
 await db.close();

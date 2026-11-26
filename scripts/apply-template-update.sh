@@ -48,6 +48,7 @@ BRANCH="main"
 UPSTREAM_URL=""
 DRY_RUN=0
 FORCE=0
+IGNORE_POLICY=0
 
 # 距離上次 commit 超過這麼多天，就留一個心跳 commit。
 # GitHub 的門檻是 60 天，留 15 天緩衝（排程可能延遲或失敗幾次）。
@@ -61,10 +62,11 @@ usage() {
   --branch <名稱>     要同步的分支（預設 main）
   --dry-run           只預覽會更新到哪一版，工作區完全不動
   --force             本機有未提交的修改時仍然繼續（會被蓋掉）
+  --ignore-policy     略過「介面上關掉自動更新」的檢查（維護者代跑時用）
   -h, --help          顯示這份說明
 
 結束碼：
-  0  已是最新，或同步完成（含：不是 git repo、就是範本本身）
+  0  已是最新，或同步完成（含：不是 git repo、就是範本本身、介面上關掉了自動更新）
   2  參數錯誤
   4  同步後檢查失敗，或找不到可以當 commit 作者的人
   5  本機有未提交的修改，拒絕覆蓋
@@ -78,6 +80,7 @@ while [ $# -gt 0 ]; do
     --branch) BRANCH="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --force) FORCE=1; shift ;;
+    --ignore-policy) IGNORE_POLICY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "未知參數：$1" >&2; usage >&2; exit 2 ;;
   esac
@@ -239,6 +242,119 @@ if [ "$FORCE" != "1" ]; then
     printf '%s\n\n' "$dirty" >&2
     fail "請先 commit 或 stash；確定要放棄這些修改就加 --force" 5
   fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2c. 研究室在介面上關掉自動更新了嗎？
+#
+# 為什麼這個檢查在腳本裡、而且要在任何修改之前：
+#   真正執行更新的是這支腳本，但「要不要更新」是研究室在系統介面上決定的。
+#   介面把決定寫進資料庫，Action 讀不到資料庫 —— 所以只能反過來問網站
+#   （/api/update-policy 只回一個布林值，公開可讀）。
+#
+#   這個檢查必須排在任何 git 動作之前：關掉的意思就是「什麼都不要動」。
+#
+# 找不到網站時怎麼辦（重要）
+#   「放行」。理由：這個系統預設就是自動更新，而既有已部署的研究室沒有
+#   設定 LAB_SITE_URL。如果查不到就停掉更新，等於一次設定遺漏讓所有人的
+#   修正都再也送不出去，而且畫面上完全看不出來。寧可照原本行為更新。
+#   要讓開關生效，請在 GitHub repo 的 Settings → Secrets and variables →
+#   Actions → Variables 設一個 LAB_SITE_URL = 你們的網站網址。
+# ---------------------------------------------------------------------------
+resolve_site_url() {
+  # 1. 明確指定優先（維護者代跑、或自訂網域）
+  if [ -n "${LAB_SITE_URL:-}" ]; then
+    printf '%s' "${LAB_SITE_URL%/}"
+    return 0
+  fi
+
+  # 2. 自動偵測：repo 若有接 Vercel 的 Git 整合，推上去會產生 production
+  #    deployment，從 GitHub Deployments API 可以拿到那個網址。
+  #    查不到（沒接整合、沒網路、私有 repo 沒授權）就放棄，交給呼叫端決定。
+  local repo="${GITHUB_REPOSITORY:-}"
+  if [ -z "$repo" ]; then
+    local remote_url
+    remote_url="$(git remote get-url origin 2>/dev/null || true)"
+    repo="$(printf '%s' "$remote_url" | sed -n 's#.*github\.com[:/]\([^/]*/[^/]*\).*#\1#p' | sed 's#\.git$##')"
+  fi
+  [ -z "$repo" ] && return 1
+
+  local api="https://api.github.com/repos/$repo/deployments?environment=Production&per_page=1"
+  local json
+  json="$(curl -fsSL --max-time 10 -H 'Accept: application/vnd.github+json' \
+    -H 'User-Agent: lab-tracker-update-script' "$api" 2>/dev/null || true)"
+  [ -z "$json" ] && return 1
+
+  local statuses_url
+  statuses_url="$(printf '%s' "$json" | node -e '
+    let text = "";
+    process.stdin.on("data", chunk => { text += chunk; });
+    process.stdin.on("end", () => {
+      try {
+        const rows = JSON.parse(text);
+        process.stdout.write(Array.isArray(rows) && rows[0] ? String(rows[0].statuses_url || "") : "");
+      } catch { process.stdout.write(""); }
+    });
+  ' 2>/dev/null || true)"
+  [ -z "$statuses_url" ] && return 1
+
+  local statuses
+  statuses="$(curl -fsSL --max-time 10 -H 'Accept: application/vnd.github+json' \
+    -H 'User-Agent: lab-tracker-update-script' "$statuses_url" 2>/dev/null || true)"
+  [ -z "$statuses" ] && return 1
+
+  local url
+  url="$(printf '%s' "$statuses" | node -e '
+    let text = "";
+    process.stdin.on("data", chunk => { text += chunk; });
+    process.stdin.on("end", () => {
+      try {
+        const rows = JSON.parse(text);
+        const first = Array.isArray(rows) ? rows[0] : null;
+        process.stdout.write(String((first && (first.environment_url || first.target_url)) || ""));
+      } catch { process.stdout.write(""); }
+    });
+  ' 2>/dev/null || true)"
+
+  url="${url%/}"
+  [ -z "$url" ] && return 1
+  printf '%s' "$url"
+}
+
+if [ "$IGNORE_POLICY" != "1" ]; then
+  site_url="$(resolve_site_url || true)"
+
+  if [ -z "$site_url" ]; then
+    log "查不到這個網站的網址，略過「介面上關掉自動更新」的檢查（照常更新）。"
+    log "若希望開關生效，請在 GitHub 的 Actions 變數設定 LAB_SITE_URL。"
+  else
+    policy_json="$(curl -fsSL --max-time 10 "$site_url/api/update-policy" 2>/dev/null || true)"
+
+    if [ -z "$policy_json" ]; then
+      log "連不到 $site_url 的更新開關，照常更新（可能是網站還沒部署這一版）。"
+    else
+      auto_update="$(printf '%s' "$policy_json" | node -e '
+        let text = "";
+        process.stdin.on("data", chunk => { text += chunk; });
+        process.stdin.on("end", () => {
+          try {
+            const value = JSON.parse(text).autoUpdate;
+            // 只有明確的 false 才算關掉；其他一律視為開。
+            process.stdout.write(value === false ? "0" : "1");
+          } catch { process.stdout.write("1"); }
+        });
+      ' 2>/dev/null || echo 1)"
+
+      if [ "$auto_update" = "0" ]; then
+        log "這間研究室已在介面上關閉自動更新，這次不做任何事。"
+        log "（要恢復：到系統的「系統設定」把自動更新打開。）"
+        exit 0
+      fi
+      log "自動更新：開啟中。"
+    fi
+  fi
+else
+  log "已指定 --ignore-policy，略過自動更新開關。"
 fi
 
 # ---------------------------------------------------------------------------

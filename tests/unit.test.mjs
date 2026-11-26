@@ -379,6 +379,36 @@ test('wizard：資料表探測結果的判讀', async (t) => {
   });
 });
 
+// 「欄位在不在」的判讀。第 3 段（003）沒有新增資料表，只在既有的
+// lab_settings 加一個欄位，所以「表在不在」永遠問不出它有沒有跑過。
+// 判斷錯誤的後果是：漏跑的人一路綠燈，直到某天去按自動更新開關才發現壞掉。
+test('wizard：欄位探測結果的判讀', async (t) => {
+  await t.test('42703 = 欄位不存在', () => {
+    assert.equal(
+      wizard.interpretColumnProbe({ code: '42703', message: 'column lab_settings.auto_update_enabled does not exist' }, 'auto_update_enabled'),
+      false
+    );
+  });
+
+  await t.test('只有錯誤訊息沒有 code，也要認得出來', () => {
+    assert.equal(
+      wizard.interpretColumnProbe({ message: 'column "auto_update_enabled" does not exist' }, 'auto_update_enabled'),
+      false
+    );
+  });
+
+  await t.test('其他錯誤（權限、語法）不可以說「欄位不存在」', () => {
+    // 這裡一定要回 null（不確定），不能回 false。
+    // 回 false 會在資料庫臨時出錯時叫使用者重跑 SQL —— 而他明明跑過了。
+    assert.equal(wizard.interpretColumnProbe({ code: '42501', message: 'permission denied' }, 'auto_update_enabled'), null);
+  });
+
+  await t.test('看不懂的內容回「不確定」，不是「不存在」', () => {
+    assert.equal(wizard.interpretColumnProbe('<html>502</html>', 'auto_update_enabled'), null);
+    assert.equal(wizard.interpretColumnProbe(null, 'auto_update_enabled'), null);
+  });
+});
+
 test('wizard：設定狀態的判讀', async (t) => {
   await t.test('伺服器說 setupComplete=true 就是完成了', () => {
     const result = wizard.interpretSetupStatus({ setupComplete: true });
