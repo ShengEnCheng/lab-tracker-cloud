@@ -217,11 +217,90 @@ function report() {
 window.addEventListener('load', () => setTimeout(report, 800));
 </script>`;
 
+
 // ---------------------------------------------------------------------------
-function runScenario(label, harness) {
+// 情境 C：資料裡有惡意內容（儲存型 XSS）
+//
+// 受試者姓名、成員名稱、研究代碼、里程碑名稱都是研究室成員自己填的。
+// 以前這些值直接塞進 innerHTML，或用 '${x}' 放進 onclick —— 任何能編輯資料的成員
+// 都能讓管理員的瀏覽器執行任意程式，偷走存在 localStorage 的登入身分。
+// 這裡把攻擊字串塞進每一種欄位，確認頁面只把它們當純文字顯示。
+// ---------------------------------------------------------------------------
+const XSS = '<img src=x onerror="window.__xss=(window.__xss||[]).concat(\'html\')">';
+const JS_BREAKOUT = "x');window.__xss=(window.__xss||[]).concat('js');//";
+const today = new Date().toISOString().slice(0, 10);
+const evilData = {
+  refDate: today,
+  members: [{ id: JS_BREAKOUT, name: XSS, role: XSS }],
+  optBone: [{
+    id: 'OPT-1', name: XSS, screenDate: today,
+    t1Date: today, t1Owner: JS_BREAKOUT, t1Done: false
+  }],
+  music40: [],
+  customStudies: [{
+    code: JS_BREAKOUT, description: XSS, defaultOwner: JS_BREAKOUT,
+    milestones: [{ key: JS_BREAKOUT, label: XSS, offsetDays: 0, rule: 'OPT_T' }],
+    subjects: [{ id: 'S-1', name: XSS, startDate: today, items: { [JS_BREAKOUT]: { date: today, owner: XSS, done: false } } }]
+  }]
+};
+const headSeed = `<script>localStorage.setItem('LAB_TRACKER_STORAGE_V1', ${JSON.stringify(JSON.stringify(evilData))});</script>`;
+
+const harnessXss = `
+<script>
+window.__uiErrors = [];
+// 跟情境 B 一樣回「已完成設定」，主系統才會真的把表格渲染出來
+window.fetch = async (url) => {
+  if (String(url).includes('/api/config')) {
+    return {
+      ok: true,
+      json: async () => ({
+        app: 'lab-tracker-cloud', version: '1.0.0', backendConfigured: true, setupComplete: true,
+        organizationName: '測試研究室', supabaseUrl: 'https://test.supabase.co', anonKey: 'sb_publishable_test'
+      })
+    };
+  }
+  return { ok: false, json: async () => ({}) };
+};
+
+function report() {
+  const results = [];
+  const check = (name, fn) => {
+    try { results.push({ name, ok: !!fn() }); }
+    catch (error) { results.push({ name, ok: false, detail: String(error && error.message || error) }); }
+  };
+  check('主系統有顯示（不是停在設定畫面）', () => !document.body.classList.contains('setup-pending'));
+  check('待辦表格有渲染出含惡意內容的那一列', () => document.querySelectorAll('#actionTableBody tr').length > 0);
+  // 把所有頁籤都點開一次，讓每一種表格都渲染出來
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.click());
+  // 觸發每一個 onclick / onchange（JS 跳脫型攻擊要被「點到」才會發作）
+  document.querySelectorAll('[onclick*="openAddSubjectModal"], .cal-event, .toggle-done-btn, .student-card')
+    .forEach(el => { try { el.click(); } catch {} });
+  document.querySelectorAll('[onchange]').forEach(el => {
+    try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch {}
+  });
+
+  setTimeout(() => {
+    const html = document.body.innerHTML;
+    check('攻擊字串真的有出現在畫面上（確認測試有覆蓋到）', () => html.includes('&lt;img src=x'));
+    check('沒有任何一段注入的 HTML 被執行', () => !(window.__xss || []).includes('html'));
+    check('沒有任何一段從 onclick/onchange 跳出字串的程式被執行', () => !(window.__xss || []).includes('js'));
+    check('頁面上沒有被插入的 <img src=x>', () => !document.querySelector('img[src="x"]'));
+
+    const pre = document.createElement('pre');
+    pre.id = 'ui-result';
+    pre.textContent = JSON.stringify({ results, errors: window.__uiErrors }, null, 2);
+    document.body.appendChild(pre);
+  }, 300);
+}
+window.addEventListener('load', () => setTimeout(report, 800));
+</script>`;
+
+// ---------------------------------------------------------------------------
+function runScenario(label, harness, headScript = '') {
   const dir = mkdtempSync(join(tmpdir(), 'lab-cloud-ui-'));
   const pagePath = join(dir, 'ui-test.html');
-  writeFileSync(pagePath, html.replace('</body>', harness + '\n</body>'));
+  const page = headScript ? html.replace('<head>', '<head>' + headScript) : html;
+  writeFileSync(pagePath, page.replace('</body>', harness + '\n</body>'));
 
   let dom;
   try {
@@ -257,7 +336,9 @@ function runScenario(label, harness) {
 const setupResult = runScenario('情境 A：全新部署（還沒設定）', harnessSetup);
 const readyResult = runScenario('情境 B：設定完成（正常使用）', harnessReady);
 
-const total = setupResult.total + readyResult.total;
-const failed = setupResult.failed + readyResult.failed;
+const xssResult = runScenario('情境 C：資料裡有惡意內容（XSS）', harnessXss, headSeed);
+
+const total = setupResult.total + readyResult.total + xssResult.total;
+const failed = setupResult.failed + readyResult.failed + xssResult.failed;
 console.log(`\nUI 測試：${total - failed} 通過，${failed} 失敗`);
 process.exit(failed ? 1 : 0);
