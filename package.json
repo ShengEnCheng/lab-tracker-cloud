@@ -21,11 +21,12 @@
     "test:import": "node tests/user-export-import.test.mjs",
     "test:import-ui": "node tests/import-button.test.mjs",
     "test:update": "node tests/update-path.test.mjs",
+    "test:auto-update": "node tests/auto-update.test.mjs",
     "test:checkup": "node tests/feature-checkup.test.mjs",
     "test:wizard": "node tests/wizard.test.mjs",
     "test:journey": "node tests/wizard-journey.test.mjs",
     "test:ui": "node tests/ui.test.mjs",
-    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:session && npm run test:handoff && npm run test:roster && npm run test:export && npm run test:import && npm run test:import-ui && npm run test:update && npm run test:checkup && npm run test:wizard && npm run test:journey && npm run test:ui",
+    "test:all": "npm run check && npm run check:wizard && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:session && npm run test:handoff && npm run test:roster && npm run test:export && npm run test:import && npm run test:import-ui && npm run test:update && npm run test:auto-update && npm run test:checkup && npm run test:wizard && npm run test:journey && npm run test:ui",
     "verify:sql": "node scripts/verify-sql.mjs"
   }
 }

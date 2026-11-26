@@ -197,16 +197,17 @@ npm run test:export       # 16 項：匯出檔裡每一個欄位都在、一個�
 npm run test:import       # 32 項：使用者真的上傳一份匯出檔，能不能匯進新系統
 npm run test:import-ui    # 20 項：用瀏覽器按「⭱ 匯入」選那份檔案，整條路走一遍
 npm run test:update       # 17 項：研究室部署好之後，維護者怎麼幫他們更新
+npm run test:auto-update  # 21 項：自動更新真的會跑嗎、會不會默默失效
 npm run test:checkup      # 33 項：使用者每天要做的事，逐一真的做一遍
 npm run test:wizard       # 32 項：引導網頁的 7 個步驟與版面
 npm run test:journey      # 27 項：引導網頁從第 1 步真的走到第 7 步
 npm run test:ui           # 38 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（440 項）
+npm run test:all          # 全部（461 項）
 ```
 
-### 十支測試各負責哪一段
+### 十一支測試各負責哪一段
 
-這套產品的路很長，切成十段來測，任一段壞掉都不會被別段掩蓋：
+這套產品的路很長，切成十一段來測，任一段壞掉都不會被別段掩蓋：
 
 | 測試 | 涵蓋的路 |
 |---|---|
@@ -218,6 +219,7 @@ npm run test:all          # 全部（440 項）
 | `test:import` | **收得下來**：拿一份真的匯出檔 POST 進新系統，資料與名冊都對 |
 | `test:import-ui` | **畫面上真的能按**：用瀏覽器把檔案塞進「⭱ 匯入」，走完確認與快照 |
 | `test:update` | **交付之後的維護**：研究室怎麼更新、為什麼不能用 merge、更新不會碰資料 |
+| `test:auto-update` | **自動更新不會默默死掉**：作者身分、心跳 commit、備份分支、範本自己不會被 reset |
 | `test:checkup` | **每天要做的事**：新增成員、打勾、切頁籤、看月曆、匯出，逐一真的做一遍 |
 | `test:journey` | 助理在引導網頁上從第 1 步按到第 7 步，每步驗證都要通過 |
 
@@ -230,6 +232,16 @@ npm run test:all          # 全部（440 項）
 因為文件原本寫的更新方式（按「Sync fork」）**根本做不出來**：一鍵部署是
 複製一份新 repo，不是 fork，那個按鈕不會出現。所以這支測試驗的是
 「文件只能寫驗證過的做法」，不是「文件寫得漂亮」。
+
+`test:auto-update` 守的是**三個在畫面上完全看不出來的死法**。自動更新如果壞了，
+網站只會「停在舊版」——沒有錯誤訊息、沒有紅字、沒有任何通知，而且很可能要等到
+某個功能壞掉才會有人發現。它驗的三件事都是這一類：
+
+- 自動更新的 commit 作者若是 bot，Vercel 會默默擋掉部署（作者必須是團隊成員）
+- 研究室 60 天沒活動，GitHub 會默默停用排程（所以要有心跳 commit）
+- `.github/` 若被同步覆蓋，排程會把自己刪掉（所以更新只發生一次）
+
+這三項的變異測試都有效：故意改壞任何一項，測試就會紅。
 
 `test:export` 守的是使用者最後的保命手段。匯出看起來只是 `JSON.stringify`，
 但只要有一個欄位沒被寫進去，那個欄位就是**永久消失，而且不會有任何錯誤訊息**。
@@ -402,12 +414,74 @@ GitHub、資料在 Supabase，兩者本來就分開。
 3. `npm run test:all` 全部通過
 4. push 到範本 repo
 
-### 各研究室那邊
+### 預設做法：自動更新，研究室完全不用動手
+
+這是目前的做法。研究室什麼都不用做 —— 他們的 repo 每天自己去範本拉更新。
+
+運作方式：
+
+```
+.github/workflows/template-sync.yml   每天 UTC 20:00（台灣清晨 4:00）跑一次
+        │
+        └─ bash scripts/apply-template-update.sh
+             ├─ 比版號：範本比現在新才動作
+             ├─ 保留 .github/（否則排程會把自己刪掉）
+             ├─ reset 到範本的最新版
+             ├─ 用研究室自己的身分 commit
+             └─ push 回自己的 repo → Vercel 自動重新部署
+```
+
+這兩個檔案一鍵部署時就跟著複製到研究室，所以**不需要他們做任何設定**。
+
+同步邏輯刻意放在 `scripts/apply-template-update.sh` 而不是寫進 workflow YAML，
+是因為 GitHub 的 `GITHUB_TOKEN` **不能修改 `.github/workflows/` 底下的檔案**
+（安全限制，任何 `permissions` 都無法解開）。邏輯放腳本、YAML 只負責呼叫，
+以後改同步方式就不必動 workflow 檔。`tests/auto-update.test.mjs` 會驗證這件事。
+
+有三個地方不做的話會**默默壞掉，而且畫面上完全看不出來** ——
+
+**① commit 作者要是研究室的人，不能是 bot。**
+Vercel 的原生 Git 整合在建立部署前會檢查 commit 作者是不是團隊成員，
+不是就直接擋掉整筆部署，而且不會出現任何錯誤訊息。所以腳本沿用這個 repo
+**第一個 commit 的作者**（也就是當初按一鍵部署的那個人，一定是有權限的成員），
+不是固定的 bot 信箱。用 bot 的話網站會永遠停在舊版，而且查不出原因。
+
+**② 每 45 天要留一個心跳 commit。**
+GitHub 會在使用者「60 天沒有活動」後自動停用排程 workflow，同樣不通知
+（[GitHub 文件](https://docs.github.com/actions/using-workflows/disabling-and-enabling-a-workflow)：
+「In a public repository, scheduled workflows are automatically disabled when no
+repository activity has occurred in 60 days.」）。研究室平常不會 commit，
+所以腳本會在距上次 commit 超過 45 天時發一個空的 commit 把計時器歸零。
+
+**③ 更新前要留備份分支。**
+`reset --hard` 是不可逆的。腳本每次更新前會把舊的 HEAD 推到
+`pre-update-backup` 分支（固定名稱，所以永遠只有一條），研究室發現新版有問題時
+可以退回去：
+
+```bash
+git reset --hard origin/pre-update-backup && git push --force origin main
+```
+
+維護者要確認某間研究室的自動更新有沒有在跑，看兩個地方：
+
+```bash
+curl https://他們的網址/api/health            # 看 version 有沒有跟上
+```
+
+或到他們 repo 的 **Actions** 分頁看「自動更新」這個 workflow 的執行紀錄。
+如果顯示 `disabled_inactivity`，就是 60 天沒活動被停用 —— 到 Actions 分頁按
+「Enable workflow」，或 `gh workflow enable template-sync.yml` 即可。
+
+> 這個機制只保證「程式碼跟上範本」。**資料庫的 migration 仍然要另外處理**，
+> 見下面「最大的維護負擔」那一節。
+
+### 手動更新（自動更新失效時的備援）
 
 研究室**不需要**、也**不應該**自己改程式碼。他們要調的東西（研究室名稱、
 成員、方案、追蹤時間點）都在資料庫與 `lab_settings`，不在程式碼裡。
 
-更新只有一條路，研究室（或他們的工程師）在自己電腦上跑：
+如果自動更新因為某些原因沒跑（例如 60 天沒活動被停用），研究室（或他們的
+工程師）可以在自己電腦上手動跑：
 
 ```bash
 cd lab-tracker                      # 他們自己的那份
@@ -535,7 +609,7 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（440 項）
+- [ ] `npm run test:all` 全綠（461 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
 - [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那兩段

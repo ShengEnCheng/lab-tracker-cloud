@@ -1,0 +1,54 @@
+# 每天檢查範本有沒有新版，有就自動同步過來。
+#
+# 這是「研究室那一側」的檔案 —— 一鍵部署時跟著程式碼一起複製過去。範本 repo
+# 自己也會有一份（因為它就是被複製的來源），但範本跑起來時會立刻認出「我就是
+# 範本」然後結束，不會做任何事。
+#
+# 為什麼是「拉」不是「推」：一鍵部署出來的 repo 跟範本沒有共同祖先，維護者
+# 對它沒有任何寫入權限。反過來，這個 repo 可以用自己的 GITHUB_TOKEN 去讀公開
+# 的範本 —— 所以更新由這裡主動拉。
+#
+# 同步邏輯全部在 scripts/apply-template-update.sh，這裡只負責：
+#   1. 給它一個可以寫入的 GITHUB_TOKEN
+#   2. 每天叫它一次
+#
+# 把邏輯放在腳本而不是 YAML 裡，是因為 GITHUB_TOKEN 不能修改
+# .github/workflows/ 底下的檔案（GitHub 的安全限制，任何 permissions 都無法
+# 解開）。腳本會原樣保留 .github/，所以推送的差異裡永遠不會有 workflow 檔，
+# 這個限制就不會被觸發；而且以後改同步邏輯也不必動這個 YAML。
+
+name: 自動更新
+
+on:
+  schedule:
+    # 每天 UTC 20:00（台灣時間隔天清晨 4:00）—— 研究室沒人用的時段。
+    - cron: '0 20 * * *'
+  workflow_dispatch: {}   # 也可以到 Actions 頁面按「Run workflow」手動跑
+
+# 同時只跑一份，避免兩次排程撞在一起互相覆蓋。
+concurrency:
+  group: template-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # 需要推回自己的 repo（Vercel 靠這個 push 重新部署）
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取出這個 repo
+        uses: actions/checkout@v4
+        with:
+          # 用預設的 GITHUB_TOKEN 就夠：它對「這個 repo」有寫入權，
+          # 而同步時讀的是公開的範本，不需要額外的金鑰。
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: 設定 git 身分
+        run: |
+          git config user.name "lab-tracker-bot"
+          git config user.email "lab-tracker-bot@users.noreply.github.com"
+
+      - name: 同步範本更新
+        run: bash scripts/apply-template-update.sh

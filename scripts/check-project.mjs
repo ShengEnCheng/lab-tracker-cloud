@@ -82,6 +82,7 @@ const REQUIRED_FILES = [
   'tests/user-export-import.test.mjs',
   'tests/import-button.test.mjs',
   'tests/update-path.test.mjs',
+  'tests/auto-update.test.mjs',
   'tests/feature-checkup.test.mjs',
   'tests/wizard-journey.test.mjs',
   'tests/wizard.test.mjs',
