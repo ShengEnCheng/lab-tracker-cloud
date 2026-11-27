@@ -152,7 +152,8 @@ function makeLabRepo(dir, { customize = false } = {}) {
 
   if (customize) {
     // 研究室自己改了一點東西（例如把副標題換成自己的說法）。
-    // 用頁首副標題的整個元素當錨點；改版換了文字時，這裡要跟著改。
+    // 用頁首副標題的整個元素當錨點：副標題文字怎麼換都不用動這裡；
+    // 只有 <div class="brand-sub"> 的標籤結構或 class 名稱改了才要跟著改。
     const indexPath = join(dir, 'index.html');
     const html = readFileSync(indexPath, 'utf8');
     const subtitle = /<div class="brand-sub">[^<]*<\/div>/;

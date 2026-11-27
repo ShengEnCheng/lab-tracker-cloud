@@ -579,8 +579,10 @@ check('變數後面接非 ASCII 字元時都有用 ${} 包起來', () => {
   for (const file of shellFiles) {
     read(file).split('\n').forEach((line, index) => {
       if (line.trimStart().startsWith('#')) return;
-      const match = line.match(/\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7F])/);
-      if (match) problems.push(`${file}:${index + 1} 的 ${match[0]} 要改成 \${${match[0].slice(1)}}`);
+      // 同一行可能不只一處（例如「$a」，但應該是「$b」），一次全部列出來
+      for (const match of line.matchAll(/\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7F])/g)) {
+        problems.push(`${file}:${index + 1} 的 ${match[0]} 要改成 \${${match[0].slice(1)}}`);
+      }
     });
   }
   if (problems.length) throw new Error(problems.join('；'));
