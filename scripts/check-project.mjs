@@ -87,6 +87,7 @@ const REQUIRED_FILES = [
   'tests/auto-update.test.mjs',
   'tests/auto-update-policy.test.mjs',
   'tests/auto-update-settings-ui.test.mjs',
+  'tests/data-safety.test.mjs',
   'tests/feature-checkup.test.mjs',
   'tests/wizard-journey.test.mjs',
   'tests/wizard.test.mjs',
@@ -307,6 +308,44 @@ check('003 加上自動更新開關欄位，且預設是開的', () => {
   // 必須是 if not exists：研究室可能按兩次 RUN，重跑不能爆。
   if (!/add column if not exists/i.test(sql)) {
     throw new Error('alter table 必須用 add column if not exists，重複執行才不會失敗');
+  }
+  return true;
+});
+
+// 資料安全：登入時不能無聲蓋掉「還沒同步的本機資料」。
+//
+// 為什麼要用結構檢查守：這是一個**沒有錯誤訊息**的故障。少了保護，程式照樣
+// 跑得順、測試照樣綠（因為沒有人去問「資料還在不在」），只有使用者會發現
+// 「我剛剛打的東西不見了」。前身專案踩過這個坑，cloud 版改寫時漏掉了。
+//
+// 這四件事必須同時成立，少一個就等於沒有保護：
+check('登入同步前會先問，不會無聲蓋掉本機資料', () => {
+  const html = read('index.html');
+
+  // 1. 同步覆蓋之前要有 confirmDiscardLocalData 的把關
+  if (!/confirmDiscardLocalData\s*\(/.test(html)) {
+    throw new Error('index.html 沒有 confirmDiscardLocalData —— 登入會無聲蓋掉本機資料');
+  }
+  // 2. 而且它必須擋在 appData = payload.data 之前
+  const guardAt = html.indexOf('confirmDiscardLocalData(payload.data)');
+  const assignAt = html.indexOf('appData = payload.data');
+  if (guardAt < 0) {
+    throw new Error('syncFromBackend 沒有用 confirmDiscardLocalData(payload.data) 把關');
+  }
+  if (assignAt < 0) {
+    throw new Error('找不到 appData = payload.data');
+  }
+  if (guardAt > assignAt) {
+    throw new Error('把關寫在覆蓋之後，等於沒有把關');
+  }
+  // 3. 共用資料庫是空的時候一定要保留本機資料（這是最危險的情況：
+  //    遠端空白看起來「沒有東西可以失去」，蓋下去卻是刪掉唯一一份）
+  if (!/remoteEmpty/.test(html)) {
+    throw new Error('沒有處理「共用資料庫是空的、本機有資料」這種情況');
+  }
+  // 4. 示範資料要認得出來，否則每次登入都會多問一次，使用者會習慣性按確定
+  if (!/isDemoData/.test(html) || !/looksLikeDemoRow/.test(html)) {
+    throw new Error('沒有認出系統內建的示範資料，登入時會多問一次');
   }
   return true;
 });

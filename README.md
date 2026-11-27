@@ -55,7 +55,7 @@ docs/                     安裝指南與交接文件
 ```bash
 npm run dev          # 本機啟動（http://localhost:8080）
 npm run check        # 專案結構檢查
-npm run test:all     # 全部測試（587 項）
+npm run test:all     # 全部測試（629 項）
 
 # 改過 migration 或引導網頁裡的 SQL 之後，另外跑這個：
 npm install --no-save @electric-sql/pglite
