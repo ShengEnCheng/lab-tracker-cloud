@@ -2141,6 +2141,590 @@ td.sticky-col {
       /* 空狀態那一列維持原樣 */
       .action-table tbody tr:has(.empty-state) { display: block; }
     }
+
+    /* ==========================================================================
+       Design layer v3（2026-11）— 紙本實驗紀錄的感覺
+       原則：
+         1. 顏色只拿來表達「急不急」；其餘一律墨色與灰階。
+         2. 不用漸層、彩虹邊框、emoji；層次靠字重、留白與細線。
+         3. 數字（倒數、日期、編號）用等寬數字，上下對齊才好掃視。
+       ========================================================================== */
+
+    :root {
+      --ink: #1c1b19;
+      --ink-light: #3d3b36;
+      --muted: #76726a;
+      --faint: #a29e95;
+      --line: #d9d6ce;
+      --soft-line: #e8e5de;
+
+      --surface: #ffffff;
+      --canvas: #f3f2ee;
+      --surface-muted: #faf9f6;
+      --surface-sunken: #eeece6;
+
+      /* 主色：深墨綠（按鈕、選取、連結） */
+      --navy: #1c1b19;
+      --blue: #24564a;
+      --blue-hover: #1a4339;
+      --blue-soft: #edf3f0;
+      --blue-border: #c3d5cc;
+      --ring: 0 0 0 3px rgba(36, 86, 74, 0.18);
+
+      /* 燈號色：降低彩度，像印刷品上的色票 */
+      --t-overdue: #a3301e;
+      --t-red: #cf4b2f;
+      --t-amber: #c58a17;
+      --t-green: #5b8656;
+      --t-future: #b9b4aa;
+      --t-done: #9b978e;
+
+      --red: #a3301e;
+      --red-soft: #f8ebe7;
+      --red-border: #eac8bf;
+      --amber: #8f6410;
+      --amber-soft: #f8f0dc;
+      --amber-border: #e8d4a6;
+      --green: #476d43;
+      --green-soft: #ebf1e8;
+      --green-border: #c8d8c3;
+
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-xl: 10px;
+
+      --shadow-xs: none;
+      --shadow-sm: 0 1px 2px rgba(28, 27, 25, 0.06);
+      --shadow: 0 2px 6px rgba(28, 27, 25, 0.06);
+
+      --num: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC",
+        "Microsoft JhengHei", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    }
+
+    .k-overdue { --tone: var(--t-overdue); --tone-bg: #f8ebe7; }
+    .k-red     { --tone: var(--t-red);     --tone-bg: #fbece7; }
+    .k-amber   { --tone: var(--t-amber);   --tone-bg: #f8f0dc; }
+    .k-green   { --tone: var(--t-green);   --tone-bg: #ebf1e8; }
+    .k-future  { --tone: var(--t-future);  --tone-bg: #f1f0ec; }
+    .k-done    { --tone: var(--t-done);    --tone-bg: #f1f0ec; }
+
+    body { background: var(--canvas); font-size: 13.5px; letter-spacing: 0; }
+    ::selection { background: rgba(36, 86, 74, 0.16); }
+
+    /* ---------- 頁首 ---------- */
+    .app-header {
+      background: rgba(243, 242, 238, 0.9);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand-mark {
+      width: 34px; height: 34px; flex-basis: 34px;
+      border-radius: 6px;
+      background: var(--ink);
+      box-shadow: none;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .brand-title { font-size: 16px; font-weight: 700; letter-spacing: 0.01em; color: var(--ink); }
+    .brand-sub { font-size: 11.5px; color: var(--muted); letter-spacing: 0.08em; }
+
+    .status-live-pill {
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      font-weight: 600;
+      padding: 0 4px;
+    }
+    .user-chip { background: transparent; border: 0; color: var(--ink-light); }
+
+    .date-control {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: none;
+    }
+    .date-control > span:first-child { color: var(--muted); font-weight: 600; }
+    .date-control input[type="date"] { font-family: var(--num); font-size: 12.5px; }
+
+    /* ---------- 按鈕：扁平、清楚的主從 ---------- */
+    .btn { border-radius: var(--radius-md); font-weight: 600; letter-spacing: 0.01em; }
+    .btn-primary,
+    .btn-primary:hover,
+    .btn-success,
+    .btn-indigo {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+      box-shadow: none;
+    }
+    .btn-primary:hover, .btn-success:hover, .btn-indigo:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+    .btn-secondary, .btn-light,
+    .app-header .btn-secondary {
+      background: var(--surface);
+      color: var(--ink-light);
+      border-color: var(--line);
+      box-shadow: none;
+    }
+    .btn-secondary:hover, .btn-light:hover,
+    .app-header .btn-secondary:hover {
+      background: var(--surface-muted);
+      border-color: #bdb8ad;
+      color: var(--ink);
+    }
+    .btn-xs { border-radius: 5px; }
+
+    main { gap: 14px; padding-top: 20px; }
+
+    /* ---------- 資料狀態橫幅：一條細色邊，不搶戲 ---------- */
+    .data-state-banner {
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--muted);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      color: var(--ink-light);
+      padding: 10px 14px;
+      align-items: center;
+    }
+    .data-state-banner .banner-icon { display: none; }
+    .data-state-banner .banner-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+    .data-state-banner .banner-text { font-size: 12px; color: var(--muted); opacity: 1; }
+    .data-state-banner[data-kind="demo"] { background: #fbf7ec; border-color: #eadfc2; border-left-color: var(--t-amber); color: var(--ink-light); }
+    .data-state-banner[data-kind="demo"] .btn { border-color: var(--line); color: var(--ink-light); }
+    .data-state-banner[data-kind="local-only"] { background: #fbf7ec; border-color: #eadfc2; border-left-color: var(--t-amber); color: var(--ink-light); }
+    .data-state-banner[data-kind="pending-upload"] { background: var(--surface); border-left-color: var(--t-red); color: var(--ink-light); }
+    .data-state-banner[data-kind="remote"],
+    .data-state-banner[data-kind="remote-empty"] { background: var(--surface); border-left-color: var(--blue); color: var(--ink-light); }
+
+    /* ---------- 篩選列 ---------- */
+    .filter-bar {
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0 0 14px;
+    }
+    .filter-item {
+      background: var(--surface);
+      border-color: var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: none;
+    }
+    .filter-item label { color: var(--muted); font-weight: 600; }
+    .filter-item select { font-weight: 600; color: var(--ink); }
+    .filter-item input[type="search"] { border-radius: var(--radius-md); }
+    .filter-hint { color: var(--faint); }
+    .filter-hint b { color: var(--muted); font-weight: 600; }
+
+    /* ---------- KPI：一條統計列，點一格就篩選 ---------- */
+    .summary-grid {
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .summary-card {
+      border: 0;
+      border-right: 1px solid var(--soft-line);
+      border-radius: 0;
+      box-shadow: none;
+      padding: 14px 18px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: background 0.15s ease;
+    }
+    .summary-card:last-child { border-right: 0; }
+    .summary-card::before { display: none; }
+    .summary-card:hover { transform: none; box-shadow: none; background: var(--surface-muted); border-color: var(--soft-line); }
+    .summary-card.overdue { --tone: var(--t-overdue); }
+    .summary-card.red { --tone: var(--t-red); }
+    .summary-card.amber { --tone: var(--t-amber); }
+    .summary-card.green { --tone: var(--t-green); }
+    .summary-card.done { --tone: var(--t-done); }
+    .summary-label { margin: 0; order: 1; }
+    .summary-title { font-size: 12px; font-weight: 600; color: var(--ink-light); gap: 7px; letter-spacing: 0.02em; }
+    .kpi-mark { width: 8px; height: 8px; border-radius: 2px; background: var(--tone); display: inline-block; }
+    .summary-value {
+      order: 2;
+      font-family: var(--num);
+      font-size: 30px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-top: 4px;
+    }
+    .summary-card .summary-value,
+    .summary-card.amber .summary-value,
+    .summary-card.green .summary-value,
+    .summary-card.done .summary-value { color: var(--ink); }
+    .summary-card.overdue .summary-value,
+    .summary-card.red .summary-value { color: var(--tone); }
+    .summary-note { order: 3; font-size: 11px; color: var(--faint); margin-top: 0; }
+    .summary-card.active-filter {
+      border-color: var(--soft-line);
+      background: var(--surface-muted);
+      box-shadow: inset 0 -3px 0 var(--tone);
+    }
+
+    /* ---------- 頁籤：底線式 ---------- */
+    .view-tabs {
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      padding: 0;
+      gap: 26px;
+      margin-top: 6px;
+    }
+    .tab-btn {
+      padding: 10px 1px 11px;
+      border: 0;
+      border-radius: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+    }
+    .tab-btn:hover { background: transparent; color: var(--ink); }
+    .tab-btn.active {
+      background: transparent;
+      color: var(--ink);
+      border: 0;
+      box-shadow: inset 0 -2px 0 var(--ink);
+    }
+    .tab-count, .tab-btn.active .tab-count {
+      background: transparent;
+      color: var(--faint);
+      font-family: var(--num);
+      font-weight: 500;
+      min-width: 0;
+      padding: 0;
+    }
+
+    /* ---------- 面板 ---------- */
+    .panel { border: 1px solid var(--line); border-radius: var(--radius-xl); box-shadow: none; }
+    .panel-head { background: var(--surface); border-bottom: 1px solid var(--soft-line); padding: 16px 20px; }
+    .panel-title { font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+    .panel-desc { font-size: 12px; color: var(--muted); }
+    .panel-body { padding: 18px 20px 20px; }
+
+    /* ---------- 負責人卡片：一條比例條就看得出誰卡住 ---------- */
+    .student-cards-grid { grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .student-card {
+      position: relative;
+      border: 1px solid var(--soft-line);
+      border-radius: var(--radius-lg);
+      padding: 12px 14px 11px;
+      background: var(--surface);
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .student-card:hover { transform: none; border-color: #c9c4b8; box-shadow: none; }
+    .student-card.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); background: var(--surface); }
+    .sc-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .sc-avatar {
+      width: 30px; height: 30px; flex: 0 0 30px;
+      border-radius: 50%;
+      color: #fff;
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+    }
+    .sc-meta { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+    .sc-meta .student-name { font-size: 13px; font-weight: 700; color: var(--ink); -webkit-line-clamp: 1; }
+    .sc-meta .student-role-text { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sc-pct { text-align: right; line-height: 1.1; }
+    .sc-pct b { font-family: var(--num); font-size: 19px; font-weight: 500; color: var(--ink); }
+    .sc-pct small { font-size: 11px; color: var(--muted); margin-left: 1px; }
+    .sc-pct span { display: block; font-family: var(--num); font-size: 10.5px; color: var(--faint); }
+    .sc-bar {
+      display: flex; gap: 2px;
+      height: 6px; border-radius: 3px; overflow: hidden;
+      background: var(--surface-sunken);
+    }
+    .sc-seg { flex-basis: 0; min-width: 4px; background: var(--tone); }
+    .sc-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); }
+    .sc-stat { display: inline-flex; align-items: center; gap: 5px; }
+    .sc-stat i { width: 6px; height: 6px; border-radius: 50%; background: var(--tone); }
+    .sc-stat b { font-family: var(--num); font-weight: 600; color: var(--ink); }
+    .sc-stat.k-overdue:not(.is-zero) b, .sc-stat.k-red:not(.is-zero) b { color: var(--tone); }
+    .sc-stat.is-zero { opacity: 0.4; }
+    .sc-active-tag {
+      position: absolute; top: -9px; right: 10px;
+      background: var(--ink); color: #fff;
+      font-size: 10.5px; font-weight: 600;
+      padding: 1px 7px; border-radius: 4px;
+    }
+
+    /* ---------- 負責人標籤：圓點 + 代號 ---------- */
+    .student-pill,
+    .student-pill[class*="s-"] {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      gap: 6px;
+      color: var(--ink-light);
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .student-pill i { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+    /* ---------- 徽章（管理表與其他地方共用） ---------- */
+    .badge { border: 0; border-radius: 4px; font-weight: 600; padding: 2px 7px; }
+    .badge-overdue { background: var(--red-soft); color: var(--t-overdue); }
+    .badge-red, .badge-red-flash { background: #fbece7; color: #b8401f; }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); }
+    .badge-green { background: var(--green-soft); color: var(--green); }
+    .badge-done { background: #efeee9; color: #6e6a62; }
+    .badge-future { background: #f3f2ee; color: var(--muted); }
+
+    /* ---------- 表格 ---------- */
+    .table-wrap { border: 1px solid var(--soft-line); border-radius: var(--radius-lg); }
+    table { font-size: 12.5px; }
+    thead th {
+      background: var(--surface-muted);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    tbody td { border-bottom: 1px solid var(--soft-line); color: var(--ink-light); }
+    tbody tr:hover td { background: #fcfbf8; }
+    th.th-right { text-align: right; }
+
+    /* 待辦清單 */
+    .action-table tbody tr:hover { background: transparent; }
+    .action-table .group-row th {
+      position: static;
+      background: var(--surface);
+      text-align: left;
+      padding: 18px 14px 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: 0.02em;
+      white-space: normal;
+    }
+    .action-table .group-row:first-child th { padding-top: 12px; }
+    .g-mark { display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: var(--tone); margin-right: 9px; vertical-align: 0; }
+    .g-count { font-family: var(--num); font-weight: 500; color: var(--muted); margin-left: 8px; }
+    .g-hint { font-size: 11.5px; font-weight: 400; color: var(--faint); margin-left: 14px; letter-spacing: 0; }
+
+    .action-row td { padding: 9px 14px; }
+    .action-row td:first-child { box-shadow: inset 3px 0 0 var(--tone); padding-left: 16px; }
+    .ac-status { white-space: nowrap; width: 1%; }
+    .ac-days {
+      font-family: var(--num);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+    .ac-days small { font-family: inherit; font-size: 11px; color: var(--muted); margin-left: 3px; font-weight: 400; }
+    .k-overdue .ac-days, .k-red .ac-days { color: var(--tone); }
+    .k-overdue .ac-days small, .k-red .ac-days small { color: var(--tone); opacity: 0.75; }
+    .ac-days-done { font-size: 12px; color: var(--faint); font-family: inherit; }
+    .ac-flag {
+      display: inline-block; margin-left: 8px;
+      font-size: 10.5px; font-weight: 700;
+      color: #fff; background: var(--t-red);
+      padding: 1px 6px; border-radius: 3px;
+      animation: badge-flash 1.6s ease-in-out infinite;
+    }
+    .ac-date { font-family: var(--num); font-size: 12.5px; color: var(--ink); white-space: nowrap; width: 1%; }
+    .ac-dow { font-family: inherit; color: var(--faint); margin-left: 8px; font-size: 11.5px; }
+    .ac-subject strong { font-family: var(--num); font-weight: 600; font-size: 12.5px; }
+    .ac-sub-name { color: var(--faint); margin-left: 7px; font-size: 11.5px; }
+    .ac-ms { color: var(--ink); font-weight: 600; }
+    .ac-study { color: var(--muted); font-size: 12px; }
+    .action-row.k-done td { color: var(--faint); }
+    .action-row.k-done .ac-ms, .action-row.k-done .ac-subject strong, .action-row.k-done .ac-date { color: var(--muted); font-weight: 500; }
+    .action-row.k-done td:first-child { box-shadow: inset 3px 0 0 var(--soft-line); }
+    .action-toggle { text-align: right; white-space: nowrap; width: 1%; }
+
+    /* 完成按鈕：一個方框，勾起來就是完成 */
+    .toggle-done-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink-light);
+      border-radius: 5px;
+      padding: 4px 10px 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .toggle-done-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+    .toggle-done-btn .tick {
+      width: 13px; height: 13px; border-radius: 3px;
+      border: 1.5px solid currentColor;
+      display: inline-grid; place-items: center;
+      opacity: 0.7;
+    }
+    .toggle-done-btn.is-done { background: transparent; border-color: transparent; color: var(--muted); }
+    .toggle-done-btn.is-done:hover { background: var(--surface-muted); border-color: var(--line); color: var(--ink); }
+    .toggle-done-btn.is-done .tick { background: var(--t-done); border-color: var(--t-done); opacity: 1; }
+    .toggle-done-btn.is-done .tick::after { content: ""; width: 6px; height: 3px; border: 1.5px solid #fff; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+    .toggle-done-btn.is-overdue { background: var(--surface); border-color: var(--red-border); color: var(--t-overdue); }
+    .toggle-done-btn.is-overdue:hover { background: var(--red-soft); }
+
+    /* ---------- 管理表的里程碑格 ---------- */
+    .ms-cell { border-radius: var(--radius-md); border-color: var(--soft-line); }
+    .ms-cell.state-overdue { background: #fbf3f1; border-color: var(--red-border); box-shadow: inset 3px 0 0 var(--t-overdue); }
+    .ms-cell.state-red, .ms-cell.state-red-flash { background: #fdf5f2; border-color: #efd1c7; box-shadow: inset 3px 0 0 var(--t-red); }
+    .ms-cell.state-amber { background: #fcf8ee; border-color: var(--amber-border); box-shadow: inset 3px 0 0 var(--t-amber); }
+    .ms-cell.state-green { background: #f6f9f4; border-color: var(--green-border); box-shadow: inset 3px 0 0 var(--t-green); }
+    .ms-cell.state-done { background: var(--surface-muted); border-color: var(--soft-line); }
+    .ms-date-input, .ms-owner-input { font-family: var(--num); border-color: var(--line); border-radius: 4px; }
+    .subject-id { font-family: var(--num); }
+
+    .rule-banner {
+      background: var(--surface-muted);
+      border: 1px solid var(--soft-line);
+      border-left: 3px solid var(--blue);
+      border-radius: var(--radius-md);
+      color: var(--ink-light);
+      font-size: 12px;
+    }
+    .rule-banner strong { color: var(--ink); }
+    .rule-banner code { background: var(--surface); border-color: var(--line); color: var(--ink); }
+
+    /* ---------- 月曆：格線式，像掛在牆上的月曆 ---------- */
+    .cal-month-title { font-family: var(--num); font-size: 15px; font-weight: 600; }
+    .cal-legend { background: transparent; border: 0; padding: 0; margin-bottom: 12px; gap: 6px 18px; }
+    .legend-item { color: var(--muted); font-weight: 500; }
+    .legend-dot { border-radius: 2px; width: 8px; height: 8px; }
+    .dot-overdue { background: var(--t-overdue); }
+    .dot-red { background: var(--t-red); }
+    .dot-amber { background: var(--t-amber); }
+    .dot-green { background: var(--t-green); }
+    .dot-done { background: var(--t-done); }
+    .dot-today { background: var(--ink); border: 0; border-radius: 50%; }
+
+    .cal-grid {
+      gap: 1px;
+      background: var(--soft-line);
+      border: 1px solid var(--soft-line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .cal-grid > .empty-state { background: var(--surface); margin: 0; border-radius: 0; }
+    .cal-dow {
+      background: var(--surface-muted);
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      padding: 8px 0;
+    }
+    .cal-dow.is-weekend { color: var(--faint); }
+    .cal-day {
+      border: 0;
+      border-radius: 0;
+      min-height: 116px;
+      padding: 7px 7px 8px;
+      gap: 4px;
+      background: var(--surface);
+    }
+    .cal-day:hover { border: 0; background: #fdfcfa; }
+    .cal-day.other-month { background: var(--surface-muted); opacity: 1; }
+    .cal-day.is-today { background: var(--surface); box-shadow: inset 0 0 0 2px var(--ink); border: 0; }
+    .cal-day.has-t-alert { border: 0; box-shadow: inset 0 0 0 2px var(--t-red); animation: none; }
+    .cal-day.is-today.has-t-alert { box-shadow: inset 0 0 0 2px var(--t-red), inset 0 0 0 4px #fff; }
+    .cal-day-num { margin-bottom: 2px; }
+    .cal-day-n {
+      font-family: var(--num);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-light);
+      min-width: 22px; height: 22px;
+      display: inline-grid; place-items: center;
+      border-radius: 50%;
+    }
+    .cal-day.is-today .cal-day-n { background: var(--ink); color: #fff; font-weight: 600; }
+    .cal-today-tag { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+    .cal-t-tag {
+      font-size: 10px; font-weight: 700; color: #fff;
+      background: var(--t-red); padding: 1px 5px; border-radius: 3px;
+      animation: badge-flash 1.6s ease-in-out infinite;
+    }
+
+    .cal-event {
+      --tone: var(--t-future); --tone-bg: #f3f2ee;
+      background: var(--tone-bg);
+      border-left: 2px solid var(--tone);
+      border-radius: 0 4px 4px 0;
+      padding: 4px 6px 4px 7px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--ink-light);
+    }
+    .cal-event:hover { transform: none; filter: none; box-shadow: 0 0 0 1px var(--tone); }
+    .cal-event.ev-overdue { --tone: var(--t-overdue); --tone-bg: #f8ebe7; background: var(--tone-bg); border-left-color: var(--tone); }
+    .cal-event.ev-red { --tone: var(--t-red); --tone-bg: #fbece7; background: var(--tone-bg); border-left-color: var(--tone); }
+    .cal-event.ev-t-urgent { --tone: var(--t-red); --tone-bg: #fbece7; background: var(--tone-bg); border-left: 3px solid var(--tone); animation: none; font-weight: 400; }
+    .cal-event.ev-amber { --tone: var(--t-amber); --tone-bg: #f8f0dc; background: var(--tone-bg); border-left-color: var(--tone); }
+    .cal-event.ev-green { --tone: var(--t-green); --tone-bg: #ebf1e8; background: var(--tone-bg); border-left-color: var(--tone); }
+    .cal-event.ev-future { --tone: var(--t-future); --tone-bg: #f3f2ee; background: var(--tone-bg); border-left-color: var(--tone); }
+    .cal-event.ev-done { --tone: var(--t-done); --tone-bg: #f6f5f2; background: var(--tone-bg); border-left-color: var(--soft-line); opacity: 1; color: var(--faint); }
+    .ev-l1 { display: flex; justify-content: space-between; gap: 4px; }
+    .ev-l1 strong { font-family: var(--num); font-size: 11px; font-weight: 600; color: var(--ink); }
+    .ev-done .ev-l1 strong { color: var(--muted); font-weight: 500; }
+    .ev-check { color: var(--t-done); font-size: 10px; }
+    .ev-l2 { color: var(--ink-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ev-done .ev-l2 { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--soft-line); }
+    .ev-l3 { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--faint); white-space: nowrap; overflow: hidden; }
+    .ev-l3 i { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 5px; }
+
+    /* ---------- 對話框 ---------- */
+    .modal-card { border-radius: var(--radius-xl); border: 1px solid var(--line); }
+    .modal-title { font-size: 15px; font-weight: 700; }
+
+    /* ---------- 窄螢幕 ---------- */
+    @media (max-width: 1024px) {
+      .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .summary-card { border-bottom: 1px solid var(--soft-line); }
+    }
+    @media (max-width: 760px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .action-table tbody tr.group-row {
+        display: block; border: 0; box-shadow: none; background: transparent;
+        padding: 0; margin: 14px 0 6px; grid-template-columns: none;
+      }
+      .action-table tbody tr.group-row th { display: block; border: 0; padding: 0 2px; background: transparent; }
+      .g-hint { display: block; margin: 2px 0 0 18px; }
+      .action-table tbody tr.action-row {
+        border-radius: var(--radius-lg);
+        border-color: var(--soft-line);
+        box-shadow: inset 3px 0 0 var(--tone);
+      }
+      .action-row td:first-child { box-shadow: none; padding-left: 0; }
+      .action-table .action-toggle { text-align: left; }
+      .cal-day { min-height: 84px; }
+      .ev-l3 { display: none; }
+    }
+
+    /* 比例條：完成用深墨色從左邊長出來，像進度；未到期是淺灰底 */
+    .sc-seg.k-done { background: var(--ink-light); }
+    .sc-seg.k-future { background: #dcd8cf; }
+    /* 逾期列已經有左側紅線與紅色天數，按鈕不必再紅，避免整片紅 */
+    .action-row .toggle-done-btn.is-overdue { border-color: var(--line); color: var(--ink-light); background: var(--surface); }
+    .action-row .toggle-done-btn.is-overdue:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+    .filter-actions { width: 100%; justify-content: space-between; }
+    /* 管理表格子裡的按鈕維持小尺寸 */
+    .ms-cell .toggle-done-btn { padding: 2px 8px; font-size: 11px; border-radius: 4px; gap: 4px; }
+    .cal-month-title { font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+    @media (max-width: 760px) {
+      .action-table .ac-status, .action-table .ac-date, .action-table .action-toggle { width: auto; }
+      .action-table .action-toggle .toggle-done-btn { width: 100%; justify-content: center; padding: 7px 10px; }
+      #tab-action .table-wrap { border: 0; border-radius: 0; background: transparent; max-height: none; }
+    }
   </style>
 </head>
 <body>
@@ -2254,7 +2838,7 @@ td.sticky-col {
         <div class="brand-mark" id="brandMark" aria-hidden="true">研</div>
         <div>
           <div class="brand-title" id="brandTitle">研究室追蹤系統</div>
-          <div class="brand-sub">OPT_Bone・music40・自訂期程　×　學生負責人　×　自動推算與逐筆完成</div>
+          <div class="brand-sub">收案與評估追蹤</div>
         </div>
       </div>
 
@@ -2265,7 +2849,7 @@ td.sticky-col {
           </div>
           <span id="authUserText" class="user-chip"></span>
           <button class="btn btn-secondary btn-xs" id="authButton" type="button">登入</button>
-          <button class="btn btn-secondary btn-xs hidden" id="syncNowBtn" type="button" title="從共用後端重新載入最新資料">↻ 同步</button>
+          <button class="btn btn-secondary btn-xs hidden" id="syncNowBtn" type="button" title="從共用後端重新載入最新資料">同步</button>
         </div>
 
         <div class="date-control" title="所有燈號與逾期判定皆以此基準日計算">
@@ -2278,8 +2862,8 @@ td.sticky-col {
         <div class="btn-group-primary">
           <button class="btn btn-primary" id="openAddSubjectBtn" type="button">＋ 新增個案</button>
           <button class="btn btn-secondary" id="openAddStudyBtn" type="button">＋ 新增研究案</button>
-          <button class="btn btn-secondary" id="openManageMembersBtn" type="button" title="管理實驗室成員與學生名冊">👥 人員名冊</button>
-          <button class="btn btn-secondary hidden" id="openSettingsBtn" type="button" title="系統設定：自動更新等">⚙️ 系統設定</button>
+          <button class="btn btn-secondary" id="openManageMembersBtn" type="button" title="管理實驗室成員與學生名冊">人員名冊</button>
+          <button class="btn btn-secondary hidden" id="openSettingsBtn" type="button" title="系統設定：自動更新等">系統設定</button>
         </div>
 
       </div>
@@ -2300,8 +2884,8 @@ td.sticky-col {
         </div>
       </div>
       <div class="banner-actions">
-        <button class="btn btn-secondary btn-xs" id="bannerUploadBtn" type="button" hidden>↑ 存進共用資料庫</button>
-        <button class="btn btn-secondary btn-xs" id="bannerExportBtn" type="button" hidden>⭳ 先匯出備份</button>
+        <button class="btn btn-secondary btn-xs" id="bannerUploadBtn" type="button" hidden>存進共用資料庫</button>
+        <button class="btn btn-secondary btn-xs" id="bannerExportBtn" type="button" hidden>先匯出備份</button>
         <button class="btn btn-secondary btn-xs" id="bannerAuthBtn" type="button">登入以查看真實資料</button>
         <button class="btn btn-secondary btn-xs" id="bannerClearLocalBtn" type="button" hidden>清除本機資料</button>
         <button class="btn btn-secondary btn-xs" id="bannerDismissBtn" type="button" title="暫時隱藏這個提醒">知道了</button>
@@ -2344,69 +2928,54 @@ td.sticky-col {
       <div class="filter-actions">
         <p class="filter-hint"><b>篩選同步套用三頁</b>　·　資料自動儲存</p>
         <div class="btn-group-util">
-          <button class="btn btn-secondary btn-xs" id="clearFiltersBtn" type="button" title="清除篩選、回到收案待辦並將基準日設為今日">⌂ 重設視圖</button>
-          <button class="btn btn-secondary btn-xs" id="exportJsonBtn" type="button" title="匯出目前資料為 JSON 備份">⭳ 匯出</button>
+          <button class="btn btn-secondary btn-xs" id="clearFiltersBtn" type="button" title="清除篩選、回到收案待辦並將基準日設為今日">重設視圖</button>
+          <button class="btn btn-secondary btn-xs" id="exportJsonBtn" type="button" title="匯出目前資料為 JSON 備份">匯出</button>
           <label class="btn btn-secondary btn-xs" style="margin:0; cursor:pointer;" title="匯入已備份的 JSON 檔案">
-            ⭱ 匯入 <input type="file" id="importJsonInput" accept=".json" style="display:none;">
+            匯入 <input type="file" id="importJsonInput" accept=".json" style="display:none;">
           </label>
         </div>
       </div>
     </section>
 
-    <!-- Summary KPI Cards -->
+    <!-- Summary KPI strip：點一格就篩選該燈號，再點一次取消 -->
     <section class="summary-grid" aria-label="示警統計摘要">
-      <article class="summary-card overdue" tabindex="0" role="button" data-filter="OVERDUE" title="點擊快速篩選逾期項目">
-        <div class="summary-label">
-          <span class="summary-title"><span class="summary-icon">⚠️</span>逾期未完成</span>
-          <span class="summary-action-badge">點擊篩選</span>
-        </div>
+      <article class="summary-card overdue" tabindex="0" role="button" data-filter="OVERDUE" title="點擊只看「逾期未完成」，再點一次取消">
+        <div class="summary-label"><span class="summary-title"><i class="kpi-mark" aria-hidden="true"></i>逾期未完成</span></div>
         <div class="summary-value" id="kpiOverdue">0</div>
-        <div class="summary-note">已過預定日且尚未勾選完成</div>
+        <div class="summary-note">已過預定日，尚未勾選完成</div>
       </article>
-      <article class="summary-card red" tabindex="0" role="button" data-filter="RED" title="點擊快速篩選紅燈急件">
-        <div class="summary-label">
-          <span class="summary-title"><span class="summary-icon">🔴</span>紅燈急件 (含 T點前2天)</span>
-          <span class="summary-action-badge">緊急待辦</span>
-        </div>
+      <article class="summary-card red" tabindex="0" role="button" data-filter="RED" title="點擊只看「紅燈急件」，再點一次取消">
+        <div class="summary-label"><span class="summary-title"><i class="kpi-mark" aria-hidden="true"></i>紅燈急件</span></div>
         <div class="summary-value" id="kpiRed">0</div>
-        <div class="summary-note">階段結束前 1 週內 ／ T1~T4 前 2 天</div>
+        <div class="summary-note">1 週內到期；T1–T4 前 2 天</div>
       </article>
-      <article class="summary-card amber" tabindex="0" role="button" data-filter="AMBER" title="點擊快速篩選黃燈項目">
-        <div class="summary-label">
-          <span class="summary-title"><span class="summary-icon">🟡</span>黃燈預警</span>
-          <span class="summary-action-badge">準備聯絡</span>
-        </div>
+      <article class="summary-card amber" tabindex="0" role="button" data-filter="AMBER" title="點擊只看「黃燈預警」，再點一次取消">
+        <div class="summary-label"><span class="summary-title"><i class="kpi-mark" aria-hidden="true"></i>黃燈預警</span></div>
         <div class="summary-value" id="kpiAmber">0</div>
-        <div class="summary-note">OPT 前 2 週內 ／ music40 前 2~3 週</div>
+        <div class="summary-note">約 2–3 週內到期</div>
       </article>
-      <article class="summary-card green" tabindex="0" role="button" data-filter="GREEN" title="點擊快速篩選綠燈項目">
-        <div class="summary-label">
-          <span class="summary-title"><span class="summary-icon">🟢</span>綠燈提醒</span>
-          <span class="summary-action-badge">提前留意</span>
-        </div>
+      <article class="summary-card green" tabindex="0" role="button" data-filter="GREEN" title="點擊只看「綠燈提醒」，再點一次取消">
+        <div class="summary-label"><span class="summary-title"><i class="kpi-mark" aria-hidden="true"></i>綠燈提醒</span></div>
         <div class="summary-value" id="kpiGreen">0</div>
-        <div class="summary-note">OPT 前 3 週內 ／ music40 3 週以上</div>
+        <div class="summary-note">約 3 週後到期，先留意</div>
       </article>
-      <article class="summary-card done" tabindex="0" role="button" data-filter="DONE" title="點擊快速篩選已完成項目">
-        <div class="summary-label">
-          <span class="summary-title"><span class="summary-icon">✅</span>已勾選完成</span>
-          <span class="summary-action-badge">已結案</span>
-        </div>
+      <article class="summary-card done" tabindex="0" role="button" data-filter="DONE" title="點擊只看「已完成」，再點一次取消">
+        <div class="summary-label"><span class="summary-title"><i class="kpi-mark" aria-hidden="true"></i>已完成</span></div>
         <div class="summary-value" id="kpiDone">0</div>
-        <div class="summary-note">已確認收案或完成評估／問卷</div>
+        <div class="summary-note">已勾選完成的收案與評估</div>
       </article>
     </section>
 
     <!-- Primary views: only three -->
     <nav class="view-tabs" aria-label="主要檢視切換">
       <button class="tab-btn active" data-tab="tab-action" type="button">
-        📋 收案待辦 <span class="tab-count" id="tabCountAction">0</span>
+        收案待辦 <span class="tab-count" id="tabCountAction">0</span>
       </button>
       <button class="tab-btn" data-tab="tab-calendar" type="button">
-        📅 月曆
+        月曆
       </button>
       <button class="tab-btn" data-tab="tab-management" type="button">
-        🗂️ 研究個案管理 <span class="tab-count" id="tabCountManagement">0</span>
+        研究個案管理 <span class="tab-count" id="tabCountManagement">0</span>
       </button>
     </nav>
 
@@ -2416,7 +2985,7 @@ td.sticky-col {
         <div class="panel-head">
           <div>
             <h2 class="panel-title">收案負擔總覽</h2>
-            <p class="panel-desc">依負責學生彙整待辦、逾期與完成比例；點擊卡片可快速篩選該位學生</p>
+            <p class="panel-desc">每位負責人的進度；點一張卡片只看這個人的項目。滑鼠停在任一列可看示警規則。</p>
           </div>
         </div>
         <div class="panel-body">
@@ -2426,14 +2995,13 @@ td.sticky-col {
             <table class="action-table">
               <thead>
                 <tr>
-                  <th>燈號與狀態</th>
-                  <th>負責學生</th>
-                  <th>預定日期 (倒數/逾期)</th>
-                  <th>研究案</th>
+                  <th>倒數</th>
+                  <th>預定日期</th>
                   <th>受試者</th>
-                  <th>需收案／評估之階段成果</th>
-                  <th>示警規則說明</th>
-                  <th>完成狀態切換 ／ 快速修改</th>
+                  <th>收案／評估項目</th>
+                  <th>研究案</th>
+                  <th>負責</th>
+                  <th class="th-right">完成</th>
                 </tr>
               </thead>
               <tbody id="actionTableBody"></tbody>
@@ -2484,10 +3052,10 @@ td.sticky-col {
         </div>
         <div class="panel-body">
           <div class="rule-banner">
-            <span><strong>📌 OPT_Bone 示警規則：</strong></span>
-            <span>1️⃣ <strong>階段結束聯絡評估（第一階段結束、washout結束、第二階段結束）</strong>：前 3 週🟢綠燈、前 2 週🟡黃燈、前 1 週🔴紅燈。</span>
-            <span>2️⃣ <strong>T1 ~ T4 收案提醒</strong>：前 2 天🔴紅燈閃爍，並於月曆加粗紅框。</span>
-            <span>3️⃣ <strong>自動推算 +28 天</strong>：輸入或修改各階段「開始日期」時，會自動將結束日期設為 <code>開始日期 + 28 天</code>（您仍可隨時手動覆寫結束日期）。</span>
+            <span><strong>OPT_Bone 示警規則：</strong></span>
+            <span>1. <strong>階段結束聯絡評估（第一階段結束、washout結束、第二階段結束）</strong>：前 3 週綠燈、前 2 週黃燈、前 1 週紅燈。</span>
+            <span>2. <strong>T1 ~ T4 收案提醒</strong>：前 2 天紅燈閃爍，並於月曆加粗紅框。</span>
+            <span>3. <strong>自動推算 +28 天</strong>：輸入或修改各階段「開始日期」時，會自動將結束日期設為 <code>開始日期 + 28 天</code>（您仍可隨時手動覆寫結束日期）。</span>
           </div>
           <div class="table-wrap">
             <table>
@@ -2524,16 +3092,16 @@ td.sticky-col {
             <p class="panel-desc">支援直接設定「初次／二次／三次問卷日期」（可一鍵帶入同評估日或自訂日期），並提供「勾選完成／逾期未完成」狀態切換</p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-light" id="fillMusic40QuizDatesBtn" type="button" title="將目前空白的問卷日期一鍵填入對應的評估日期">⚡ 空白問卷日一鍵同評估日</button>
+            <button class="btn btn-light" id="fillMusic40QuizDatesBtn" type="button" title="將目前空白的問卷日期一鍵填入對應的評估日期">空白問卷日帶入評估日</button>
             <button class="btn btn-primary" onclick="openAddSubjectModal('music40')" type="button">＋ 新增 music40 個案</button>
           </div>
         </div>
         <div class="panel-body">
           <div class="rule-banner">
-            <span><strong>📌 music40 示警規則：</strong></span>
-            <span>1️⃣ <strong>燈號區間</strong>：距離預定日 3 週以上🟢綠燈、2～3 週（8～21天）🟡黃燈、1 週內（≤7天）🔴紅燈、過期未勾選⚠️逾期未完成。</span>
-            <span>2️⃣ <strong>提醒項目</strong>：預計結束日期、預計追蹤日期、初次評估/問卷、二次評估/問卷、三次評估/問卷。</span>
-            <span>3️⃣ <strong>問卷日期設定</strong>：可自由選擇任意日期，或點選格子內的「同評估日」快速帶入。</span>
+            <span><strong>music40 示警規則：</strong></span>
+            <span>1. <strong>燈號區間</strong>：距離預定日 3 週以上綠燈、2～3 週（8～21天）黃燈、1 週內（≤7天）紅燈、過期未勾選為逾期未完成。</span>
+            <span>2. <strong>提醒項目</strong>：預計結束日期、預計追蹤日期、初次評估/問卷、二次評估/問卷、三次評估/問卷。</span>
+            <span>3. <strong>問卷日期設定</strong>：可自由選擇任意日期，或點選格子內的「同評估日」快速帶入。</span>
           </div>
           <div class="table-wrap">
             <table>
@@ -2622,7 +3190,7 @@ td.sticky-col {
             </div>
           </div>
           <div class="form-note">
-            💡 新增後，系統會依研究案設定之時間點自動推算訪視與收案日期；您亦可直接在表格中自由微調個別受試者日期、負責人或切換完成狀態。
+            新增後，系統會依研究案設定之時間點自動推算訪視與收案日期；您亦可直接在表格中自由微調個別受試者日期、負責人或切換完成狀態。
           </div>
         </div>
         <div class="modal-foot">
@@ -2662,7 +3230,7 @@ td.sticky-col {
           <div class="form-section">
             <div class="form-section-head">
               <div>
-                <strong class="form-section-title">⏱️ 追蹤時間點（Milestones）</strong>
+                <strong class="form-section-title">追蹤時間點（Milestones）</strong>
                 <div class="form-section-desc">設定每個節點相對於「受試者開始日」的推算天數；個案建檔時會自動排程</div>
               </div>
               <button type="button" class="btn btn-primary btn-xs" onclick="addMilestoneRow()">＋ 新增追蹤時間點</button>
@@ -2670,7 +3238,7 @@ td.sticky-col {
 
             <!-- Quick Preset Chips -->
             <div class="preset-row">
-              <span class="preset-label">⚡ 快速套用範本</span>
+              <span class="preset-label">快速套用範本</span>
               <div class="preset-chips">
                 <button type="button" class="preset-chip" onclick="applyMilestonePreset('1M_3M_6M')">標準三期 (基線/1M/3M/6M)</button>
                 <button type="button" class="preset-chip" onclick="applyMilestonePreset('28D_CROSS')">雙階段+28天介入 (+28D, Washout, 2期)</button>
@@ -2696,7 +3264,7 @@ td.sticky-col {
               </table>
             </div>
             <div style="font-size:11px; color:var(--muted); margin-top:8px;">
-              💡 示警規則說明：
+              示警規則說明：
               <strong>一般提醒</strong> 為到期前 7 天紅燈、8～21 天黃燈、21 天以上綠燈；
               <strong>重大急件</strong> 額外在到期前 2 天發出<strong>閃爍紅燈與月曆粗外框</strong>提醒。
             </div>
@@ -2704,7 +3272,7 @@ td.sticky-col {
         </div>
         <div class="modal-foot">
           <button class="btn btn-light" onclick="closeModal('studyConfigModal')" type="button">取消</button>
-          <button class="btn btn-success" type="submit" id="saveStudyConfigBtn">💾 儲存研究案設定</button>
+          <button class="btn btn-success" type="submit" id="saveStudyConfigBtn">儲存研究案設定</button>
         </div>
       </form>
     </div>
@@ -2721,7 +3289,7 @@ td.sticky-col {
   <div class="modal-backdrop" id="settingsModal">
     <div class="modal">
       <div class="modal-head">
-        <h3 class="modal-title">⚙️ 系統設定</h3>
+        <h3 class="modal-title">系統設定</h3>
         <button class="modal-close" onclick="closeModal('settingsModal')" type="button" aria-label="關閉">×</button>
       </div>
       <div class="modal-body">
@@ -2759,7 +3327,7 @@ td.sticky-col {
   <div class="modal-backdrop" id="manageMembersModal">
     <div class="modal modal-lg">
       <div class="modal-head">
-        <h3 class="modal-title">👥 實驗室負責人員名冊管理</h3>
+        <h3 class="modal-title">人員名冊</h3>
         <button class="modal-close" onclick="closeModal('manageMembersModal')" type="button" aria-label="關閉">×</button>
       </div>
       <div class="modal-body">
@@ -3246,7 +3814,7 @@ td.sticky-col {
       const userText = document.getElementById('authUserText');
       const button = document.getElementById('authButton');
       const email = session?.user?.email || session?.email || '';
-      if (userText) userText.textContent = currentProfile ? `👤 ${currentProfile.display_name || email} · ${currentProfile.role}` : (email ? `👤 ${email}` : '');
+      if (userText) userText.textContent = currentProfile ? `${currentProfile.display_name || email} · ${currentProfile.role}` : (email ? email : '');
       if (button) button.textContent = session?.access_token ? '登出' : '登入';
        const memberButton = document.getElementById('openManageMembersBtn');
        if (memberButton) memberButton.classList.toggle('hidden', backendEnabled() && !isAdmin());
@@ -3390,7 +3958,7 @@ td.sticky-col {
         '這台電腦上有 ' + rows + ' 筆還沒同步的資料，共用資料庫裡也已經有資料。\n\n'
         + '按「確定」：用共用資料庫的內容覆蓋這台電腦（本機資料不會自動備份）。\n'
         + '按「取消」：保留這台電腦的資料，先不同步。\n\n'
-        + '建議先按「⭳ 匯出」備份這台電腦的資料。'
+        + '建議先按「匯出」備份這台電腦的資料。'
       );
       if (!discard) pendingLocalUpload = true;
       return discard;
@@ -3470,7 +4038,7 @@ td.sticky-col {
         if (icon) icon.textContent = '☁️';
         if (title) title.textContent = '共用資料庫目前是空的，這是正常的起始狀態';
         if (text) {
-          text.textContent = '你已經登入，共用資料庫裡還沒有任何個案。按「＋ 新增個案」或「⭱ 匯入」就可以開始建立資料。';
+          text.textContent = '你已經登入，共用資料庫裡還沒有任何個案。按「＋ 新增個案」或「匯入」就可以開始建立資料。';
         }
       } else if (kind === 'remote') {
         if (icon) icon.textContent = '☁️';
@@ -3555,7 +4123,7 @@ td.sticky-col {
     }
 
     function clearLocalData() {
-      if (!window.confirm('這會清掉這台電腦上目前的資料（不會動到共用資料庫）。\n\n建議先按「⭳ 先匯出備份」。要繼續嗎？')) return false;
+      if (!window.confirm('這會清掉這台電腦上目前的資料（不會動到共用資料庫）。\n\n建議先按「先匯出備份」。要繼續嗎？')) return false;
       appData = buildEmptyAppData();
       bannerLocalCleared = true;
       bannerDismissed = true;
@@ -3680,7 +4248,7 @@ td.sticky-col {
         const payload = await response.json();
         if (response.status === 409) {
           setSyncStatus('版本衝突，請重新同步', 'conflict');
-          alert('共用資料已由其他使用者更新。\n目前修改尚未覆蓋遠端資料，請先按「↻ 同步」重新載入後再確認。');
+          alert('共用資料已由其他使用者更新。\n目前修改尚未覆蓋遠端資料，請先按「同步」重新載入後再確認。');
           return;
         }
         if (!response.ok) throw new Error(payload.message || payload.error || `儲存失敗 (${response.status})`);
@@ -3832,7 +4400,7 @@ td.sticky-col {
       if (done) {
         return {
           code: 'DONE',
-          label: '已完成 ✓',
+          label: '已完成',
           badgeClass: 'badge-done',
           cellClass: 'state-done',
           daysDiff: d
@@ -4144,7 +4712,7 @@ td.sticky-col {
     function renderStudentPill(owner) {
       if (!owner) return '<span class="muted">未填</span>';
       const safeOwner = escapeHtml(owner);
-      return `<span class="student-pill s-${safeOwner}">${safeOwner}</span>`;
+      return `<span class="student-pill"><i style="background:${getStudentColor(owner)}"></i>${safeOwner}</span>`;
     }
 
     function updateManagementStudyVisibility(studyFilter) {
@@ -4250,27 +4818,24 @@ td.sticky-col {
       return escapeHtml(JSON.stringify(value === null || value === undefined ? '' : String(value)));
     }
 
+    // 負責人的識別色：低彩度、彼此分得開，只用在小圓點與頭像，不搶燈號的顏色。
     function getStudentColor(owner) {
-      const map = {
-        'DEMO-A': { bg: 'linear-gradient(140deg, #2e90fa, #175cd3)', text: '#ffffff' },
-        'DEMO-B': { bg: 'linear-gradient(140deg, #7a5af8, #5925dc)', text: '#ffffff' },
-        'DEMO-C': { bg: 'linear-gradient(140deg, #f79009, #b54708)', text: '#ffffff' },
-        'DEMO-D': { bg: 'linear-gradient(140deg, #ee46bc, #c11574)', text: '#ffffff' },
-        'DEMO-E': { bg: 'linear-gradient(140deg, #12b76a, #067647)', text: '#ffffff' }
-      };
-      if (map[owner]) return map[owner];
+      const palette = ['#3f5f7f', '#8a5a3c', '#5d6f3a', '#7a4d6b', '#2f6b68', '#6b5b95', '#9a6b1f', '#4b5563'];
+      const fixed = { 'DEMO-A': 0, 'DEMO-B': 5, 'DEMO-C': 1, 'DEMO-D': 3, 'DEMO-E': 4 };
+      if (owner in fixed) return palette[fixed[owner]];
       let hash = 0;
       for (let i = 0; i < (owner || '').length; i++) hash = owner.charCodeAt(i) + ((hash << 5) - hash);
-      const gradients = [
-        'linear-gradient(140deg, #0d6e6e, #0a4f4f)',
-        'linear-gradient(140deg, #12b76a, #067647)',
-        'linear-gradient(140deg, #2e90fa, #175cd3)',
-        'linear-gradient(140deg, #f79009, #b54708)',
-        'linear-gradient(140deg, #7a5af8, #5925dc)',
-        'linear-gradient(140deg, #ee46bc, #c11574)',
-        'linear-gradient(140deg, #06aed4, #0e7490)'
-      ];
-      return { bg: gradients[Math.abs(hash) % gradients.length], text: '#ffffff' };
+      return palette[Math.abs(hash) % palette.length];
+    }
+
+    // 燈號代碼 → 視覺色調（CSS 的 .k-* 類別）
+    function statusTone(code) {
+      if (code === 'OVERDUE') return 'overdue';
+      if (code === 'RED' || code === 'RED_T') return 'red';
+      if (code === 'AMBER') return 'amber';
+      if (code === 'GREEN') return 'green';
+      if (code === 'DONE') return 'done';
+      return 'future';
     }
 
     function renderStudentWorkload(allTasks, currentStudent) {
@@ -4284,55 +4849,46 @@ td.sticky-col {
       grid.innerHTML = students.map(stu => {
         const memObj = (appData.members || []).find(m => m.id === stu);
         const stuTasks = allTasks.filter(t => t.owner === stu);
-        const overdue = stuTasks.filter(t => t.status.code === 'OVERDUE').length;
-        const red = stuTasks.filter(t => t.status.code === 'RED' || t.status.code === 'RED_T').length;
-        const amber = stuTasks.filter(t => t.status.code === 'AMBER').length;
-        const green = stuTasks.filter(t => t.status.code === 'GREEN').length;
-        const done = stuTasks.filter(t => t.status.code === 'DONE').length;
+        const count = tone => stuTasks.filter(t => statusTone(t.status.code) === tone).length;
+        const overdue = count('overdue');
+        const red = count('red');
+        const amber = count('amber');
+        const green = count('green');
+        const future = count('future');
+        const done = count('done');
         const total = stuTasks.length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 100;
         const isActive = currentStudent === stu;
-        const color = getStudentColor(stu);
         const displayName = memObj && memObj.name ? memObj.name : stu;
         const roleText = memObj && memObj.role ? memObj.role : '實驗室成員';
+        const initial = String(stu).replace(/^DEMO-/, '').slice(0, 2);
+        const seg = (n, tone, label) => n
+          ? `<span class="sc-seg k-${tone}" style="flex-grow:${n}" title="${label} ${n}"></span>` : '';
+        const stat = (n, tone, label) =>
+          `<span class="sc-stat k-${tone}${n ? '' : ' is-zero'}"><i></i>${label}<b>${n}</b></span>`;
 
         return `
-          <div class="student-card ${isActive ? 'active' : ''}" role="button" tabindex="0" onclick="toggleStudentCardFilter(${jsArg(stu)})">
-            <div class="student-card-head">
-              <div class="student-card-profile">
-                <div class="student-avatar" style="background:${color.bg}; color:${color.text};">
-                  ${escapeHtml(stu.slice(0, 2))}
-                </div>
-                <div class="student-meta">
-                  <div class="student-name-row">
-                    <strong class="student-name">${escapeHtml(displayName)}</strong>
-                    ${displayName.includes(stu) ? '' : `<span class="student-id-tag">${escapeHtml(stu)}</span>`}
-                  </div>
-                  <div class="student-role-text">${escapeHtml(roleText)}</div>
-                </div>
+          <div class="student-card ${isActive ? 'active' : ''}" role="button" tabindex="0" aria-pressed="${isActive}"
+            title="${isActive ? '再點一次取消篩選' : '只看這位負責人的項目'}"
+            onclick="toggleStudentCardFilter(${jsArg(stu)})">
+            <div class="sc-head">
+              <span class="sc-avatar" style="background:${getStudentColor(stu)}">${escapeHtml(initial)}</span>
+              <div class="sc-meta">
+                <strong class="student-name">${escapeHtml(displayName)}</strong>
+                <span class="student-role-text">${displayName.includes(stu) ? '' : `${escapeHtml(stu)} · `}${escapeHtml(roleText)}</span>
               </div>
-              <span class="student-filter-status ${isActive ? 'is-active' : ''}">
-                ${isActive ? '✓ 篩選中' : '點擊篩選'}
-              </span>
-            </div>
-
-            <div class="student-progress-wrap">
-              <div class="student-progress-info">
-                <span>收案完成率 <strong>${pct}%</strong></span>
-                <span class="student-progress-count">${done} / ${total} 項完成</span>
-              </div>
-              <div class="student-progress-track">
-                <div class="student-progress-fill" style="width: ${pct}%;"></div>
+              <div class="sc-pct" title="完成 ${done} / ${total} 項">
+                <b>${pct}<small>%</small></b>
+                <span>${done}/${total}</span>
               </div>
             </div>
-
-            <div class="student-stats">
-              <span class="badge badge-overdue" title="逾期未完成">⚠️ 逾期 ${overdue}</span>
-              <span class="badge badge-red" title="紅燈急件 (≤7天或T點前2天)">🔴 急件 ${red}</span>
-              <span class="badge badge-amber" title="黃燈預警 (2~3週內)">🟡 預警 ${amber}</span>
-              <span class="badge badge-green" title="綠燈提醒 (3週前)">🟢 提醒 ${green}</span>
-              <span class="badge badge-done" title="已完成">✅ 完成 ${done}</span>
+            <div class="sc-bar" aria-hidden="true">
+              ${seg(done, 'done', '完成')}${seg(overdue, 'overdue', '逾期')}${seg(red, 'red', '急件')}${seg(amber, 'amber', '預警')}${seg(green, 'green', '提醒')}${seg(future, 'future', '未到提醒期')}
             </div>
+            <div class="sc-stats">
+              ${stat(overdue, 'overdue', '逾期')}${stat(red, 'red', '急件')}${stat(amber, 'amber', '預警')}${stat(green, 'green', '提醒')}
+            </div>
+            ${isActive ? '<span class="sc-active-tag">篩選中</span>' : ''}
           </div>
         `;
       }).join('');
@@ -4344,42 +4900,71 @@ td.sticky-col {
       renderAll();
     }
 
+    // 待辦清單依燈號分組：一眼先看到「哪一群要先處理」，組內再依日期排序。
+    const ACTION_GROUPS = [
+      { tone: 'overdue', title: '逾期未完成', hint: '已過預定日，還沒勾選完成' },
+      { tone: 'red', title: '紅燈・一週內', hint: '階段結束前 1 週內；T1–T4 收案前 2 天' },
+      { tone: 'amber', title: '黃燈・兩到三週', hint: '開始聯絡、安排時間' },
+      { tone: 'green', title: '綠燈・提前留意', hint: '還有時間，先放在心上' },
+      { tone: 'future', title: '尚未進入提醒期', hint: '' },
+      { tone: 'done', title: '已完成', hint: '' }
+    ];
+    const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+    function weekdayOf(iso) {
+      const [y, m, d] = String(iso).split('-').map(Number);
+      if (!y || !m || !d) return '';
+      return '週' + WEEKDAYS[new Date(y, m - 1, d).getDay()];
+    }
+
     function renderActionTable(tasks) {
       const tbody = document.getElementById('actionTableBody');
-      // Sort: OVERDUE first, then RED_T, RED, AMBER, GREEN, FUTURE, DONE, and by date ascending
-      const priority = { OVERDUE: 1, RED_T: 2, RED: 3, AMBER: 4, GREEN: 5, FUTURE: 6, DONE: 7 };
-      const sorted = [...tasks].sort((a, b) => {
-        const pa = priority[a.status.code] || 9;
-        const pb = priority[b.status.code] || 9;
-        if (pa !== pb) return pa - pb;
-        return a.date.localeCompare(b.date);
-      });
 
-      if (sorted.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><strong>目前篩選條件下沒有符合的收案或評估項目。</strong><div class="empty-state-filter">${escapeHtml(getFilterSummary())}</div><button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('clearFiltersBtn').click()">清除篩選</button></div></td></tr>`;
+      if (tasks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><strong>目前篩選條件下沒有符合的收案或評估項目。</strong><div class="empty-state-filter">${escapeHtml(getFilterSummary())}</div><button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('clearFiltersBtn').click()">清除篩選</button></div></td></tr>`;
         return;
       }
 
-      tbody.innerHTML = sorted.map(t => {
-        const dText = t.status.daysDiff === 0
-          ? '<strong>今日到期</strong>'
-          : (t.status.daysDiff > 0 ? `還有 ${t.status.daysDiff} 天` : `已過 ${Math.abs(t.status.daysDiff)} 天`);
+      const byDate = (a, b) => a.date.localeCompare(b.date);
+      const rowHtml = t => {
+        const tone = statusTone(t.status.code);
+        const d = t.status.daysDiff;
+        let days;
+        if (t.done) days = '<span class="ac-days-done">完成</span>';
+        else if (d === 0) days = '今天';
+        else if (d > 0) days = `${d}<small>天後</small>`;
+        else days = `${Math.abs(d)}<small>天前</small>`;
+        const flag = t.status.code === 'RED_T' ? '<span class="ac-flag">T點收案</span>' : '';
         return `
-          <tr>
-            <td data-label="燈號"><span class="badge ${t.status.badgeClass}"><span class="badge-dot"></span>${t.status.label}</span></td>
+          <tr class="action-row k-${tone}" title="${escapeHtml(t.ruleDesc)}">
+            <td data-label="倒數" class="ac-status"><span class="ac-days">${days}</span>${flag}</td>
+            <td data-label="日期" class="ac-date">${escapeHtml(t.date)}<span class="ac-dow">${weekdayOf(t.date)}</span></td>
+            <td data-label="受試者" class="ac-subject"><strong>${escapeHtml(t.subjectId)}</strong>${t.subjectName ? `<span class="ac-sub-name">${escapeHtml(t.subjectName)}</span>` : ''}</td>
+            <td data-label="項目" class="ac-ms">${escapeHtml(t.milestoneLabel)}</td>
+            <td data-label="研究案" class="ac-study">${escapeHtml(t.study)}</td>
             <td data-label="負責">${renderStudentPill(t.owner)}</td>
-            <td data-label="日期"><strong>${escapeHtml(t.date)}</strong> <span class="muted nowrap">(${dText})</span></td>
-            <td data-label="研究案"><strong>${escapeHtml(t.study)}</strong></td>
-            <td data-label="受試者"><strong>${escapeHtml(t.subjectId)}</strong> ${t.subjectName ? `<span class="muted">(${escapeHtml(t.subjectName)})</span>` : ''}</td>
-            <td data-label="階段"><strong>${escapeHtml(t.milestoneLabel)}</strong></td>
-            <td data-label="規則" class="muted action-rule">${escapeHtml(t.ruleDesc)}</td>
             <td data-label="" class="action-toggle">
               <button type="button" class="toggle-done-btn ${t.done ? 'is-done' : (t.status.code === 'OVERDUE' ? 'is-overdue' : '')}"
+                title="${t.done ? '點擊改回未完成' : '勾選為已完成'}"
                 onclick="toggleTaskDone(${jsArg(t.studyType)}, ${t.studyIndex || 0}, ${t.rowIndex}, ${jsArg(t.doneField || t.milestoneKey)})">
-                ${t.done ? '✅ 已完成 (點擊改未完成)' : '⬜ 標記為已完成'}
+                <span class="tick" aria-hidden="true"></span>${t.done ? '已完成' : '標記完成'}
               </button>
             </td>
           </tr>
+        `;
+      };
+
+      tbody.innerHTML = ACTION_GROUPS.map(group => {
+        const rows = tasks.filter(t => statusTone(t.status.code) === group.tone).sort(byDate);
+        if (!rows.length) return '';
+        return `
+          <tr class="group-row k-${group.tone}">
+            <th colspan="7" scope="rowgroup">
+              <span class="g-mark" aria-hidden="true"></span>${group.title}<span class="g-count">${rows.length}</span>
+              ${group.hint ? `<span class="g-hint">${group.hint}</span>` : ''}
+            </th>
+          </tr>
+          ${rows.map(rowHtml).join('')}
         `;
       }).join('');
     }
@@ -4403,8 +4988,8 @@ td.sticky-col {
       titleEl.textContent = `${calYear} 年 ${calMonth} 月`;
 
       const grid = document.getElementById('calendarGrid');
-      const dows = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-      let html = dows.map(d => `<div class="cal-dow">${d}</div>`).join('');
+      const dows = ['日', '一', '二', '三', '四', '五', '六'];
+      let html = dows.map((d, i) => `<div class="cal-dow${i === 0 || i === 6 ? ' is-weekend' : ''}">${d}</div>`).join('');
 
       const firstDay = new Date(calYear, calMonth - 1, 1);
       const startDow = firstDay.getDay();
@@ -4436,8 +5021,8 @@ td.sticky-col {
         html += `
           <div class="cal-day ${isRefToday ? 'is-today' : ''} ${hasTPointAlert ? 'has-t-alert' : ''}">
             <div class="cal-day-num">
-              <span>${day}日 ${isRefToday ? '<span class="badge badge-done" style="font-size:10px;padding:0 5px;">基準日</span>' : ''}</span>
-              ${hasTPointAlert ? '<span class="badge badge-red-flash" style="font-size:9.5px;padding:0 5px;">🔔 T點收案</span>' : ''}
+              <span class="cal-day-n">${day}</span>
+              ${hasTPointAlert ? '<span class="cal-t-tag">T點收案</span>' : (isRefToday ? '<span class="cal-today-tag">基準日</span>' : '')}
             </div>
             ${dayTasks.map(t => {
               let evClass = 'ev-future';
@@ -4451,13 +5036,20 @@ td.sticky-col {
               return `
                 <div class="cal-event ${evClass}" role="button" tabindex="0" title="點擊切換完成狀態：${escapeHtml(`${t.study} ${t.subjectId} ${t.milestoneLabel} (${t.owner})`)}"
                   onclick="toggleTaskDone(${jsArg(t.studyType)}, ${t.studyIndex || 0}, ${t.rowIndex}, ${jsArg(t.doneField || t.milestoneKey)})">
-                  <div><strong>[${escapeHtml(t.owner)}] ${escapeHtml(t.study)}・${escapeHtml(t.subjectId)}</strong> ${t.done ? '✓' : ''}</div>
-                  <div>${escapeHtml(t.milestoneLabel)}</div>
+                  <div class="ev-l1"><strong>${escapeHtml(t.subjectId)}</strong>${t.done ? '<span class="ev-check">✓</span>' : ''}</div>
+                  <div class="ev-l2">${escapeHtml(t.milestoneLabel)}</div>
+                  <div class="ev-l3"><i style="background:${getStudentColor(t.owner)}"></i>${escapeHtml(t.owner)} · ${escapeHtml(t.study)}</div>
                 </div>
               `;
             }).join('')}
           </div>
         `;
+      }
+
+      // 補滿最後一週，讓月曆是完整的方格
+      const trailing = (7 - ((startDow + daysInMonth) % 7)) % 7;
+      for (let i = 0; i < trailing; i++) {
+        html += `<div class="cal-day other-month"></div>`;
       }
 
       grid.innerHTML = html;
@@ -4738,11 +5330,11 @@ td.sticky-col {
             <div style="background:#f1f5f9; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; border-bottom:1px solid var(--line);">
               <div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <strong style="font-size:15px; color:var(--navy);">🧪 ${escapeHtml(stObj.code)}</strong>
+                  <strong style="font-size:15px; color:var(--navy);">${escapeHtml(stObj.code)}</strong>
                   <span class="badge badge-future" style="font-size:11px;">共 ${stObj.subjects ? stObj.subjects.length : 0} 位個案</span>
                 </div>
                 <div style="font-size:12px; color:var(--muted); margin-top:4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                  ${stObj.description ? `<span>📝 ${escapeHtml(stObj.description)}</span><span>•</span>` : ''}
+                  ${stObj.description ? `<span>${escapeHtml(stObj.description)}</span><span>•</span>` : ''}
                   <span>預設負責人：${renderStudentPill(stObj.defaultOwner)}</span>
                   <span>•</span>
                   <span>追蹤節點：${milestones.map(m => `<code>${escapeHtml(m.label)} (+${escapeHtml(m.offsetDays)}天${m.rule === 'OPT_T' ? '⚡' : ''})</code>`).join(' ➔ ') || '<span class="muted">未設定</span>'}</span>
@@ -4750,7 +5342,7 @@ td.sticky-col {
               </div>
               <div style="display:flex; gap:8px;">
                 <button type="button" class="btn btn-primary btn-xs" onclick="openAddSubjectModal(${jsArg(stObj.code)})">＋ 新增受試者</button>
-                <button type="button" class="btn btn-secondary btn-xs" onclick="openEditStudyModal(${sIdx})" title="修改研究案名稱、備註或增減追蹤時間點">✏️ 編輯時間點與設定</button>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="openEditStudyModal(${sIdx})" title="修改研究案名稱、備註或增減追蹤時間點">編輯時間點與設定</button>
                 <button type="button" class="btn btn-danger-outline btn-xs" onclick="deleteCustomStudy(${sIdx})">刪除研究案</button>
               </div>
             </div>
@@ -5244,7 +5836,7 @@ td.sticky-col {
       const stObj = appData.customStudies[studyIdx];
       if (!stObj) return;
       document.getElementById('editStudyIndex').value = studyIdx;
-      document.getElementById('studyConfigModalTitle').textContent = `✏️ 編輯研究案設定與追蹤時間點：${stObj.code}`;
+      document.getElementById('studyConfigModalTitle').textContent = `編輯研究案設定與追蹤時間點：${stObj.code}`;
       document.getElementById('studyCodeInput').value = stObj.code;
       document.getElementById('studyDescInput').value = stObj.description || '';
       populateStudyOwnerSelect('studyDefaultOwnerSelect', stObj.defaultOwner);
@@ -5395,8 +5987,8 @@ td.sticky-col {
       const brandMark = document.getElementById('brandMark');
       const setupMark = document.getElementById('setupMark');
       if (clean) {
-        if (brandTitle) brandTitle.textContent = `${clean}｜多案實驗管理與收案示警儀表板`;
-        document.title = `${clean}｜實驗管理與收案示警儀表板`;
+        if (brandTitle) brandTitle.textContent = clean;
+        document.title = `${clean}｜收案追蹤`;
         // 品牌縮寫取名稱第一個字（中文）或前兩個字母（英文）
         const initial = /^[A-Za-z]/.test(clean) ? clean.slice(0, 2).toUpperCase() : clean.slice(0, 1);
         if (brandMark) brandMark.textContent = initial;
