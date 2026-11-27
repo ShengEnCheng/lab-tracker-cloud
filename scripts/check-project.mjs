@@ -566,6 +566,30 @@ check('使用者可見的「引導網頁第 N 步」沒有差一號', () => {
 });
 
 // ---------------------------------------------------------------------------
+console.log('\n13. shell 腳本的變數寫法');
+// 「$var，」這種寫法：變數後面直接接中文或全形標點。bash 在某些語系下
+// （例如 macOS 內建的 bash 3.2）會把那些位元組當成變數名稱的一部分，
+// 在 set -u 底下就變成「upstream_version�: unbound variable」直接中止。
+// 一律寫成「${var}，」。
+check('變數後面接非 ASCII 字元時都有用 ${} 包起來', () => {
+  const problems = [];
+  const shellFiles = fs.readdirSync(path.join(ROOT, 'scripts'))
+    .filter(name => name.endsWith('.sh'))
+    .map(name => `scripts/${name}`);
+  for (const file of shellFiles) {
+    read(file).split('\n').forEach((line, index) => {
+      if (line.trimStart().startsWith('#')) return;
+      // 同一行可能不只一處（例如「$a」，但應該是「$b」），一次全部列出來
+      for (const match of line.matchAll(/\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7F])/g)) {
+        problems.push(`${file}:${index + 1} 的 ${match[0]} 要改成 \${${match[0].slice(1)}}`);
+      }
+    });
+  }
+  if (problems.length) throw new Error(problems.join('；'));
+  return true;
+});
+
+// ---------------------------------------------------------------------------
 console.log('');
 if (failures.length) {
   console.error(`✘ 專案結構檢查失敗：${failures.length} 項`);
