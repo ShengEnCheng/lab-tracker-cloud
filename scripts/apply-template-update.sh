@@ -133,7 +133,7 @@ normalize_url() {
 # repo。先確認這裡看起來就是這個系統，避免改錯地方。
 # ---------------------------------------------------------------------------
 if [ ! -f index.html ] || [ ! -f package.json ]; then
-  fail "「$REPO_ROOT」看起來不是這個系統的 repo（找不到 index.html 或 package.json），拒絕更新" 6
+  fail "「${REPO_ROOT}」看起來不是這個系統的 repo（找不到 index.html 或 package.json），拒絕更新" 6
 fi
 
 # 不是 git repo 就沒什麼好同步的（例如把專案解壓縮成一份純檔案來交付）。
@@ -367,7 +367,7 @@ fi
 git fetch --quiet upstream "$BRANCH"
 
 if ! git rev-parse --verify --quiet "upstream/$BRANCH" >/dev/null; then
-  fail "取不到 upstream/$BRANCH（repo 網址對嗎？分支名稱對嗎？）"
+  fail "取不到 upstream/${BRANCH}（repo 網址對嗎？分支名稱對嗎？）"
 fi
 
 current_version="$(version_at "HEAD:package.json")"
@@ -430,7 +430,7 @@ fi
 if [ "$DRY_RUN" = "1" ]; then
   # dry-run 只看「會不會更新」，不應該動到工作區 —— 否則確認用的預覽
   # 本身就已經把檔案改掉了，失去意義。
-  log "（dry-run：會更新到 $upstream_version，工作區沒有被改動）"
+  log "（dry-run：會更新到 ${upstream_version}，工作區沒有被改動）"
   exit 0
 fi
 
@@ -487,7 +487,7 @@ log "已建立更新 commit（作者：$author_name <$author_email>）。"
 # 自我檢查：套用後版號必須真的變成新版，否則不要推出去。
 after_version="$(version_at "HEAD:package.json")"
 if [ "$after_version" != "$upstream_version" ]; then
-  fail "同步後版號是「$after_version」，但應該是「$upstream_version」—— 不推上去"
+  fail "同步後版號是「${after_version}」，但應該是「${upstream_version}」—— 不推上去"
 fi
 
 # ---------------------------------------------------------------------------
@@ -502,4 +502,4 @@ if ! git push --force-with-lease origin "$BRANCH" 2>/dev/null; then
   git push --force-with-lease origin "$BRANCH"
 fi
 
-log "已推上去：$upstream_version（Vercel 會自動重新部署）"
+log "已推上去：${upstream_version}（Vercel 會自動重新部署）"

@@ -152,9 +152,14 @@ function makeLabRepo(dir, { customize = false } = {}) {
 
   if (customize) {
     // 研究室自己改了一點東西（例如把副標題換成自己的說法）。
+    // 用頁首副標題的整個元素當錨點；改版換了文字時，這裡要跟著改。
     const indexPath = join(dir, 'index.html');
     const html = readFileSync(indexPath, 'utf8');
-    writeFileSync(indexPath, html.replace('OPT_Bone・music40・自訂期程', '我們的收案流程'));
+    const subtitle = /<div class="brand-sub">[^<]*<\/div>/;
+    if (!subtitle.test(html)) {
+      throw new Error('測試要模擬研究室改副標題，但 index.html 裡找不到 <div class="brand-sub">；請更新 makeLabRepo 的錨點');
+    }
+    writeFileSync(indexPath, html.replace(subtitle, '<div class="brand-sub">我們的收案流程</div>'));
     git(dir, ['commit', '-qam', '改成我們研究室的說法']);
   }
 
