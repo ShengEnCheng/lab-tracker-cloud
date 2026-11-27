@@ -222,12 +222,12 @@ npm run test:update       # 17 項：研究室部署好之後，維護者怎麼�
 npm run test:auto-update  # 22 項：自動更新真的會跑嗎、會不會默默失效
 npm run test:update-policy # 24 項：研究室在介面上關掉自動更新，真的會停下來嗎
 npm run test:settings-ui  # 51 項：那顆開關在畫面上真的看得到、按得動、失敗會撥回去
-npm run test:data-safety  # 16 項：登入時不會無聲蓋掉還沒同步的本機資料
+npm run test:data-safety  # 22 項：登入時不會無聲蓋掉還沒同步的本機資料
 npm run test:checkup      # 33 項：使用者每天要做的事，逐一真的做一遍
 npm run test:wizard       # 34 項：引導網頁的 7 個步驟與版面
 npm run test:journey      # 59 項：引導網頁從第 1 步真的走到第 7 步
 npm run test:ui           # 48 項：headless Chrome 實際載入首頁
-npm run test:all          # 全部（629 項）
+npm run test:all          # 全部（651 項）
 ```
 
 ### 十四支測試各負責哪一段
@@ -278,7 +278,7 @@ npm run test:all          # 全部（629 項）
 會把共用資料庫的內容整份拉下來覆蓋本機 —— 如果中間不問一聲，助理剛剛打的
 一整天就這樣沒了，**而且完全沒有訊息**。他只會覺得「怎麼資料變成同事的了」。
 
-這支測試驗六件事，每一件都用真的 Chrome 開頁面跑，不是讀程式碼：
+這支測試驗這些事，每一件都用真的 Chrome 開頁面跑，不是讀程式碼：
 
 - 兩邊都有資料時**一定要問**（`confirmCalls >= 1`）
 - 使用者按「取消」→ 本機資料真的還在
@@ -288,6 +288,10 @@ npm run test:all          # 全部（629 項）
 - 本機只有系統內建的示範資料時**不要問** —— 問了會讓使用者習慣性按確定，
   久了就對這個警告免疫
 - 未登入且本機有真資料時，畫面狀態是 `local-only`（看得出來，不是等人來問）
+- **按「取消」之後，橫幅要說「還沒存進共用資料庫」** —— 不能因為本機保住了就
+  假裝已同步。這是實際寫測試時抓到的一個真 bug：資料沒上傳，橫幅卻寫「已連上
+  共用資料庫，所有修改都會自動存進資料庫」，那句話會讓人放心關掉視窗
+- 兩邊都還沒有資料時，橫幅說「這是正常的起始狀態」（不要嚇人）
 
 這五個變異都驗過會紅：①拿掉整個把關（8 項紅）②有問但永遠回 true（3 項紅）
 ③拿掉「遠端空白必須保留」分支（4 項紅）④把示範資料當成真資料（2 項紅）
@@ -840,7 +844,7 @@ curl https://你的網址/api/setup-status
 
 **每次改程式碼之後**
 
-- [ ] `npm run test:all` 全綠（629 項）
+- [ ] `npm run test:all` 全綠（651 項）
 - [ ] 改過 `wizard/wizard.js` 就 `node wizard/sync-inline.mjs`
       （忘了跑，雙擊開啟的那份引導頁會是舊的；`npm run check:wizard` 會擋）
 - [ ] 改過 `supabase/migrations/*.sql` 就同步更新 `wizard/index.html` 裡內嵌的那幾段

@@ -53,7 +53,9 @@ window.fetch = async (url, opts) => {
     if (opts && opts.method === 'POST') return json({ revision: 8 });
     return json({ data: ${JSON.stringify(remoteData)}, revision: 7 });
   }
-  if (u.includes('/auth/v1') || u.includes('token')) return json({
+  // 少了這個，syncFromBackend 會在 ensureAuthSession 就退出，
+  // 後面整段（包括我們要驗的把關）根本不會執行 —— 測試會假綠。
+  if (u.includes('/auth/v1/token') || u.includes('/auth/v1/user') || u.includes('token')) return json({
     access_token: 'tok', refresh_token: 'ref', expires_in: 3600, user: { id: 'u1', email: 'a@b.c' }
   });
   return realFetch(url, opts);
@@ -81,6 +83,19 @@ window.addEventListener('load', async () => {
   window.__probe.pendingLocalUpload = pendingLocalUpload;
   window.__probe.kindAfter = dataStateKind();
   window.__probe.confirmCalls = window.__confirmCalls;
+
+  // 橫幅：使用者要在「還沒被問」的時候就看得出自己在什麼狀態。
+  // 光有 confirm 不夠 —— 那要等到登入那一刻才出現。
+  renderAll();
+  const b = document.getElementById('dataStateBanner');
+  window.__probe.banner = b ? {
+    hidden: b.hidden,
+    kind: b.dataset.kind,
+    title: (document.getElementById('dataStateTitle') || {}).textContent || '',
+    uploadVisible: !document.getElementById('bannerUploadBtn').hidden,
+    exportVisible: !document.getElementById('bannerExportBtn').hidden,
+    dismissVisible: !document.getElementById('bannerDismissBtn').hidden
+  } : null;
 
   document.title = 'PROBE:' + JSON.stringify(window.__probe);
 });
@@ -217,6 +232,35 @@ check('未登入且本機有真資料時，狀態是 local-only', () => {
     skipAuth: true
   });
   return probe && probe.kindBefore === 'local-only';
+});
+
+// 按「取消」之後，本機資料沒被上傳 → 橫幅必須說「待上傳」。
+// 這裡驗的是一個很容易忽略的謊言：資料明明沒同步，橫幅卻說「已連上共用資料庫，
+// 所有修改都會自動存進資料庫」—— 那句話會讓人放心關掉視窗。
+check('按「取消」之後，橫幅說「還沒存進共用資料庫」（不能假裝已同步）', () =>
+  asked && asked.banner && asked.banner.kind === 'pending-upload'
+  && /還沒存進共用資料庫/.test(asked.banner.title));
+check('按「取消」之後，橫幅有「存進共用資料庫」可按', () =>
+  asked && asked.banner && asked.banner.uploadVisible === true);
+check('按「取消」之後，橫幅也有「先匯出備份」可按（先備份再上傳）', () =>
+  asked && asked.banner && asked.banner.exportVisible === true);
+check('「待上傳」時不能按「知道了」把提醒關掉（那正是最危險的狀態）', () =>
+  asked && asked.banner && asked.banner.dismissVisible === false);
+
+check('遠端有資料時，橫幅說「已連上共用資料庫」', () =>
+  agreed && agreed.banner && agreed.banner.kind === 'remote'
+  && /已連上/.test(agreed.banner.title));
+
+// 全新研究室：登入了、但兩邊都還沒有資料。
+// 這時候橫幅要說「這是正常的起始狀態」—— 否則使用者會以為資料壞掉了。
+check('兩邊都還沒有資料時，橫幅說「這是正常的起始狀態」（不要嚇人）', () => {
+  const fresh = run('全新研究室', {
+    confirmAnswer: 'true',
+    remoteData: REMOTE_EMPTY,
+    localSubjects: []
+  });
+  return fresh && fresh.banner && fresh.banner.kind === 'remote-empty'
+    && /正常|起始/.test(fresh.banner.title);
 });
 
 // ---------------------------------------------------------------------------
